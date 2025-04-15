@@ -66,6 +66,18 @@ const MainAutonomous = () => {
   const [robotSize, setRobotSize] = useState({ width: 30, height: 30 });
   const [robotRotation, setRobotRotation] = useState(0); // 0 degrees = facing east
 
+  // Determine if we're on a mobile device
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Update isMobile state when window resizes
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Ensure stop command is sent on mount/unmount
   useEffect(() => {
     set(ref(database, ESP32_COMMAND_PATH), "S");
@@ -89,17 +101,15 @@ const MainAutonomous = () => {
         const width = containerRef.current.offsetWidth;
         const boxSizePixels = BOX_SIZE_CM * PIXEL_TO_CM_RATIO;
         const viewportHeight = window.innerHeight;
-        const isMobile = window.innerWidth < 768;
-        const maxHeight = isMobile 
-          ? Math.min(viewportHeight * 0.5, boxSizePixels * GRID_SIZE)
-          : Math.min(viewportHeight * 0.6, boxSizePixels * GRID_SIZE);
-        setStageSize({ width, height: maxHeight });
+        setStageSize({ width, height: isMobile 
+          ? Math.min(viewportHeight * 0.7, boxSizePixels * GRID_SIZE)
+          : Math.min(viewportHeight * 0.6, boxSizePixels * GRID_SIZE) });
       }
     };
     updateSize();
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
-  }, []);
+  }, [isMobile]);
 
   // Calculate route statistics from drawn lines
   useEffect(() => {
@@ -250,6 +260,88 @@ const MainAutonomous = () => {
       return !prev;
     });
   };
+
+  // Improve touch handling for mobile devices
+  const handleTouchStart = useCallback((e) => {
+    e.evt.preventDefault(); // Prevent scrolling while drawing
+    const stage = e.target.getStage();
+    const pos = stage.getPointerPosition();
+    
+    if (!isDrawing) return;
+    
+    if (!pos) return;
+    if (!startPoint) {
+      // Begin drawing: record the first point
+      setStartPoint({ x: pos.x, y: pos.y });
+      setPoints((prev) => [...prev, { x: pos.x, y: pos.y }]);
+    } else {
+      // Calculate snapped position for 90-degree angles
+      const dx = Math.abs(pos.x - startPoint.x);
+      const dy = Math.abs(pos.y - startPoint.y);
+      
+      let endPos = { ...pos };
+      if (dx > dy) {
+        // Horizontal line
+        endPos.y = startPoint.y;
+      } else {
+        // Vertical line
+        endPos.x = startPoint.x;
+      }
+      
+      // Create a new line from startPoint to the snapped position
+      const newLine = {
+        points: [startPoint.x, startPoint.y, endPos.x, endPos.y],
+        selected: false,
+      };
+      setLines((prev) => [...prev, newLine]);
+      setStartPoint({ x: endPos.x, y: endPos.y });
+      setPoints((prev) => [...prev, { x: endPos.x, y: endPos.y }]);
+    }
+  }, [isDrawing, startPoint]);
+
+  const handleTouchMove = useCallback((e) => {
+    e.evt.preventDefault(); // Prevent scrolling while drawing
+    
+    if (isDrawing && stageRef.current) {
+      const stage = e.target.getStage();
+      const pos = stage.getPointerPosition();
+      
+      if (pos && startPoint) {
+        // Snap to 90 degrees - determine if horizontal or vertical based on distance
+        const dx = Math.abs(pos.x - startPoint.x);
+        const dy = Math.abs(pos.y - startPoint.y);
+        
+        const snappedPos = { ...pos };
+        if (dx > dy) {
+          // Horizontal line - keep x, use startPoint's y
+          snappedPos.y = startPoint.y;
+        } else {
+          // Vertical line - keep y, use startPoint's x
+          snappedPos.x = startPoint.x;
+        }
+        setMousePosition(snappedPos);
+      } else if (pos) {
+        setMousePosition(pos);
+      }
+    }
+  }, [isDrawing, startPoint]);
+
+  const handleTouchEnd = useCallback((e) => {
+    // Double tap detection for mobile
+    if (isDrawing) {
+      const now = new Date().getTime();
+      const timeSince = now - (e.target._lastTapTime || 0);
+      
+      if (timeSince < 300 && timeSince > 0) {
+        // This is a double tap
+        setIsDrawing(false);
+        setStartPoint(null);
+        setMousePosition(null);
+      }
+      
+      e.target._lastTapTime = now;
+    }
+  }, [isDrawing]);
 
   // --- Route Conversion and Bot Control ---
   // Calculate the duration based on distance (in cm) and bot speed.
@@ -536,7 +628,9 @@ const MainAutonomous = () => {
             </CardTitle>
             {isDrawing && (
               <div className="text-xs sm:text-sm font-normal text-muted-foreground">
-                Click to place points and create straight lines. Double-click to finish drawing.
+                {isMobile ? 
+                  "Tap to place points. Double-tap to finish drawing." :
+                  "Click to place points and create straight lines. Double-click to finish drawing."}
               </div>
             )}
             {showScaleInfo && (
@@ -548,7 +642,11 @@ const MainAutonomous = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div ref={containerRef} className="border rounded-md overflow-hidden bg-accent/20 touch-none">
+              <div 
+                ref={containerRef} 
+                className={`border rounded-md overflow-hidden bg-accent/20 ${isDrawing ? 'select-none touch-none' : ''}`}
+                style={{ touchAction: isDrawing ? 'none' : 'auto' }}
+              >
                 <Stage
                   ref={stageRef}
                   width={stageSize.width}
@@ -556,9 +654,9 @@ const MainAutonomous = () => {
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
                   onDblClick={handleDoubleClick}
-                  onTouchStart={handleMouseDown}
-                  onTouchMove={handleMouseMove}
-                  onTouchEnd={handleDoubleClick}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
                 >
                   <Layer>
                     {/* Scale indicator */}
@@ -602,6 +700,7 @@ const MainAutonomous = () => {
                         points={line.points}
                         stroke={line.selected ? "#3b82f6" : "#06b6d4"}
                         strokeWidth={line.selected ? 3 : 2}
+                        hitStrokeWidth={isMobile ? 20 : 10} // Wider hit area on mobile
                         lineCap="round"
                         onClick={() => handleLineClick(i)}
                         onTap={() => handleLineClick(i)}
@@ -623,7 +722,7 @@ const MainAutonomous = () => {
                         key={i}
                         x={point.x}
                         y={point.y}
-                        radius={5}
+                        radius={isMobile ? 8 : 5} // Larger points on mobile
                         fill="#f97316"
                         stroke="#000"
                         strokeWidth={1}
