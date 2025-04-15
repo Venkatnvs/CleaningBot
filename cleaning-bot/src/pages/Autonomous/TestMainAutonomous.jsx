@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Stage, Layer, Line, Circle, Text, Rect } from 'react-konva';
+import { Stage, Layer, Line, Circle, Text, Rect, Image } from 'react-konva';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,8 +25,8 @@ const ROUTES_PATH = "esp32_cleaning_bot/saved_routes";
 
 // Command execution constants
 const COMMAND_DELAY_MS = 100; // Minimum delay between commands (ms)
-const CM_TO_MS_FACTOR = 50;  // Milliseconds per cm of movement (at full speed)
-const TURN_DURATION_MS = 1000; // Duration for a turn (ms)
+const CM_TO_MS_FACTOR = 150;  // Milliseconds per cm of movement (at full speed)
+const TURN_DURATION_MS = 1050; // Duration for a turn (ms)
 
 // Helper to pause execution for given ms
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -60,6 +60,11 @@ const MainAutonomous = () => {
 
   // Add route saving/loading state
   const [routeName, setRouteName] = useState("default_route");
+
+  // Robot image state
+  const [robotImage, setRobotImage] = useState(null);
+  const [robotSize, setRobotSize] = useState({ width: 30, height: 30 });
+  const [robotRotation, setRobotRotation] = useState(0); // 0 degrees = facing east
 
   // Ensure stop command is sent on mount/unmount
   useEffect(() => {
@@ -119,6 +124,29 @@ const MainAutonomous = () => {
       setRouteStats({ totalDistance: 0, totalDistanceCM: 0, estimatedTime: 0 });
     }
   }, [lines, botSpeed]);
+
+  // Load robot image and handle resizing based on screen size
+  useEffect(() => {
+    const image = new window.Image();
+    image.src = '/images/robot-car.png';
+    image.onload = () => {
+      setRobotImage(image);
+      
+      // Adjust robot size based on screen width
+      const handleResize = () => {
+        const width = window.innerWidth;
+        if (width < 768) {
+          setRobotSize({ width: 25, height: 25 }); // Smaller on mobile
+        } else {
+          setRobotSize({ width: 30, height: 30 }); // Default size
+        }
+      };
+      
+      handleResize(); // Set initial size
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   // --- Drawing Handlers ---
   const handleMouseMove = useCallback((e) => {
@@ -237,41 +265,38 @@ const MainAutonomous = () => {
       return null;
     }
     const instructions = [];
-    lines.forEach(line => {
+    
+    // Determine initial direction based on first line
+    let currentDirection;
+    
+    // Process lines one by one
+    lines.forEach((line, lineIndex) => {
       const [x1, y1, x2, y2] = line.points;
       const dx = x2 - x1;
       const dy = y2 - y1;
       const distance = Math.sqrt(dx * dx + dy * dy) / PIXEL_TO_CM_RATIO;
       
-      // Determine direction based on the line orientation
+      // Determine new direction based on line orientation
+      let newDirection;
       if (Math.abs(dx) > Math.abs(dy)) {
         // Horizontal movement
-        const turnCommand = dx > 0 ? 'R' : 'L';
-        instructions.push({
-          type: 'turn',
-          command: turnCommand,
-          duration: TURN_DURATION_MS,
-          coords: { x1, y1, x2, y2 }
-        });
-        instructions.push({
-          type: 'move',
-          command: 'F',
-          distance: Math.round(distance),
-          duration: calculateDuration(distance),
-          coords: { x1, y1, x2, y2 }
-        });
+        newDirection = dx > 0 ? 'east' : 'west';
       } else {
         // Vertical movement
-        if (dy > 0) {
-          // Moving down - use forward
+        newDirection = dy > 0 ? 'south' : 'north';
+      }
+      
+      // If this is the first line, just set the initial direction without turning
+      if (lineIndex === 0) {
+        if (newDirection === "east" || newDirection === "west") {
+          let turnCommand = newDirection === "east" ? 'R' : 'L';
           instructions.push({
             type: 'turn',
-            command: 'F',
+            command: turnCommand,
             duration: TURN_DURATION_MS,
             coords: { x1, y1, x2, y2 }
           });
-        } else {
-          // Moving up (previously backward) - now do a 180° turn (two 90° turns) then forward
+        } else if (newDirection === "south") {
           instructions.push({
             type: 'turn',
             command: 'R',
@@ -280,21 +305,48 @@ const MainAutonomous = () => {
           });
           instructions.push({
             type: 'turn',
-            command: 'R', 
+            command: 'R',
             duration: TURN_DURATION_MS,
             coords: { x1, y1, x2, y2 }
           });
         }
+        currentDirection = newDirection;
+      } 
+      // Only add turn command if direction changes after first line
+      else if (currentDirection !== newDirection) {
+        // Determine turn direction (clockwise = R, counter-clockwise = L)
+        let turnCommand;
+        
+        // Simple direction mapping for turns
+        const directionMap = {
+          'east': { 'north': 'L', 'south': 'R', 'west': 'R' },
+          'west': { 'north': 'R', 'south': 'L', 'east': 'R' },
+          'north': { 'east': 'R', 'west': 'L', 'south': 'R' },
+          'south': { 'east': 'L', 'west': 'R', 'north': 'R' }
+        };
+        
+        turnCommand = directionMap[currentDirection][newDirection];
         
         instructions.push({
-          type: 'move',
-          command: 'F', // Always use forward
-          distance: Math.round(distance),
-          duration: calculateDuration(distance),
+          type: 'turn',
+          command: turnCommand,
+          duration: TURN_DURATION_MS,
           coords: { x1, y1, x2, y2 }
         });
+        
+        currentDirection = newDirection;
       }
+      
+      // Add forward movement command
+      instructions.push({
+        type: 'move',
+        command: 'F',
+        distance: Math.round(distance),
+        duration: calculateDuration(distance),
+        coords: { x1, y1, x2, y2 }
+      });
     });
+    
     return instructions;
   };
 
@@ -307,13 +359,15 @@ const MainAutonomous = () => {
   };
 
   // Start bot movement by executing instructions sequentially.
-  // We use the mutable ref (isBotMovingRef) to check the stop flag.
   const startBotMovement = async () => {
     const instructions = getInstructions();
+    console.log(instructions);
+    
     if (!instructions || instructions.length === 0) return;
 
     if (points.length > 0) {
       setCurrentPosition({ ...points[0] });
+      setRobotRotation(0); // Reset rotation to default (facing east)
     }
     setIsBotMoving(true);
     isBotMovingRef.current = true;
@@ -336,10 +390,49 @@ const MainAutonomous = () => {
         // Execute the instruction
         await set(ref(database, ESP32_COMMAND_PATH), instruction.command);
         setRouteProgress(progress);
-        if (instruction.coords && instruction.coords.x2 && instruction.coords.y2) {
-          setCurrentPosition({ x: instruction.coords.x2, y: instruction.coords.y2 });
+        
+        // Handle rotation for turn commands
+        if (instruction.type === 'turn') {
+          if (instruction.coords) {
+            setCurrentPosition({ x: instruction.coords.x1, y: instruction.coords.y1 });
+          }
+          
+          // Update rotation based on turn command
+          if (instruction.command === 'R') {
+            // Turn right/clockwise: add 90 degrees
+            setRobotRotation(prev => (prev + 90) % 360);
+          } else if (instruction.command === 'L') {
+            // Turn left/counter-clockwise: subtract 90 degrees
+            setRobotRotation(prev => (prev - 90 + 360) % 360);
+          }
+          
+          await sleep(instruction.duration);
         }
-        await sleep(Math.max(COMMAND_DELAY_MS, instruction.duration));
+        // For move commands, animate the position along the path
+        else if (instruction.type === 'move' && instruction.coords) {
+          const { x1, y1, x2, y2 } = instruction.coords;
+          const startPos = { x: x1, y: y1 };
+          const endPos = { x: x2, y: y2 };
+          const totalSteps = 20; // Number of animation steps
+          const stepDuration = instruction.duration / totalSteps;
+          
+          // Animate movement along the line
+          for (let step = 0; step <= totalSteps; step++) {
+            if (!isBotMovingRef.current) break;
+            
+            const progress = step / totalSteps;
+            const newX = startPos.x + (endPos.x - startPos.x) * progress;
+            const newY = startPos.y + (endPos.y - startPos.y) * progress;
+            
+            setCurrentPosition({ x: newX, y: newY });
+            await sleep(stepDuration);
+          }
+        } else if (instruction.coords && instruction.coords.x2 && instruction.coords.y2) {
+          // setCurrentPosition({ x: instruction.coords.x2, y: instruction.coords.y2 });
+          await sleep(instruction.duration);
+        } else {
+          await sleep(instruction.duration);
+        }
 
         // If more instructions remain, send a stop command before continuing
         if (i < instructions.length - 1) {
@@ -537,7 +630,18 @@ const MainAutonomous = () => {
                       />
                     ))}
                     {/* Current bot position */}
-                    {currentPosition && (
+                    {currentPosition && robotImage ? (
+                      <Image
+                        x={currentPosition.x}
+                        y={currentPosition.y}
+                        image={robotImage}
+                        width={robotSize.width}
+                        height={robotSize.height}
+                        rotation={robotRotation}
+                        offsetX={robotSize.width / 2}
+                        offsetY={robotSize.height / 2}
+                      />
+                    ) : currentPosition && (
                       <Circle
                         x={currentPosition.x}
                         y={currentPosition.y}
