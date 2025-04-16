@@ -2,9 +2,102 @@
 #include <Firebase_ESP_Client.h>
 #include "addons/TokenHelper.h"
 #include "addons/RTDBHelper.h"
+#include <WebServer.h>
+#include <Preferences.h>
 
-const char* ssid = "Projects";
-const char* password = "12345678@";
+String storedSSID;
+String storedPassword;
+
+// For configuration portal
+bool configMode = false;
+WebServer server(80);
+Preferences preferences;
+
+void handleRoot() {
+  // This is the configuration page if no credentials are set or you want to reconfigure.
+  String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>";
+  html += "<title>ESP32 Config</title><style>";
+  html += "body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background:#f5f5f5; color:#333; }";
+  html += ".container { max-width:500px; margin:0 auto; background:white; padding:30px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1); }";
+  html += "label { display:block; margin-bottom:5px; font-weight:bold; }";
+  html += "input[type='text'], input[type='password'] { width:100%; padding:10px; margin-bottom:20px; border:1px solid #ddd; border-radius:4px; }";
+  html += "input[type='submit'] { background:#0066cc; color:white; border:none; padding:12px 20px; border-radius:4px; cursor:pointer; width:100%; font-size:16px; }";
+  html += "input[type='submit']:hover { background:#0055aa; }";
+  html += ".reset-link { display:block; text-align:center; margin-top:20px; color:#cc0000; text-decoration:none; }";
+  html += ".status { text-align:center; margin-top:20px; padding:10px; border-radius:4px; }";
+  html += ".connected { background:#d4edda; color:#155724; }";
+  html += ".disconnected { background:#f8d7da; color:#721c24; }";
+  html += "</style></head><body><div class='container'>";
+  html += "<h1>ESP32 Configuration</h1>";
+  if(WiFi.status() == WL_CONNECTED)
+    html += "<div class='status connected'>Connected to WiFi: " + WiFi.SSID() + "<br>IP: " + WiFi.localIP().toString() + "</div>";
+  else
+    html += "<div class='status disconnected'>Not connected to WiFi</div>";
+  html += "<form action='/save' method='POST'>";
+  html += "<label for='ssid'>WiFi SSID:</label>";
+  html += "<input type='text' id='ssid' name='ssid' value='" + storedSSID + "' required>";
+  html += "<label for='password'>WiFi Password:</label>";
+  html += "<input type='password' id='password' name='password' value='" + storedPassword + "'>";
+  html += "<input type='submit' value='Save Configuration'>";
+  html += "</form>";
+  html += "<a href='/reset' class='reset-link'>Reset All Configuration</a><br><br>";
+  html += "</div></body></html>";
+  server.send(200, "text/html", html);
+}
+
+void handleSave() {
+  if(server.hasArg("ssid") && server.hasArg("password")) {
+    storedSSID = server.arg("ssid");
+    storedPassword = server.arg("password");
+
+    preferences.begin("config", false);
+    preferences.putString("ssid", storedSSID);
+    preferences.putString("password", storedPassword);
+    preferences.end();
+
+    String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>";
+    html += "<title>Configuration Saved</title><style>body { font-family:Arial, sans-serif; text-align:center; padding:20px; background:#f5f5f5; }";
+    html += ".container { max-width:500px; margin:0 auto; background:white; padding:30px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1); }";
+    html += "h1 { color:#28a745; }</style>";
+    html += "<script>setTimeout(function(){ window.location.href = '/'; },5000);</script>";
+    html += "</head><body><div class='container'><h1>Configuration Saved!</h1><p>Your settings have been saved. The device will restart shortly.</p></div></body></html>";
+    server.send(200, "text/html", html);
+    delay(2000);
+    ESP.restart();
+  } else {
+    String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>";
+    html += "<title>Error</title><style>body { font-family:Arial, sans-serif; text-align:center; padding:20px; background:#f5f5f5; }";
+    html += ".container { max-width:500px; margin:0 auto; background:white; padding:30px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1); }";
+    html += "h1 { color:#dc3545; }</style></head><body><div class='container'><h1>Error</h1><p>Missing required parameters.</p>";
+    html += "<a href='/'>Go Back</a></div></body></html>";
+    server.send(400, "text/html", html);
+  }
+}
+
+void handleReset() {
+  preferences.begin("config", false);
+  preferences.clear();
+  preferences.end();
+  String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>";
+  html += "<title>Configuration Reset</title><style>body { font-family:Arial, sans-serif; text-align:center; padding:20px; background:#f5f5f5; }";
+  html += ".container { max-width:500px; margin:0 auto; background:white; padding:30px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1); }";
+  html += "h1 { color:#dc3545; }</style></head><body><div class='container'><h1>Configuration Reset!</h1>";
+  html += "<p>All settings have been cleared. The device will restart shortly.</p></div></body></html>";
+  server.send(200, "text/html", html);
+  delay(2000);
+  ESP.restart();
+}
+
+void mainConfigServer() {
+  server.on("/", HTTP_GET, handleRoot);
+  server.on("/save", HTTP_POST, handleSave);
+  server.on("/reset", HTTP_GET, handleReset);
+  server.begin();
+  Serial.println("Web server started");
+}
+
+const char* ssid = "Project";
+const char* password = "12345678";
 unsigned long lastWifiCheckTime = 0;
 const unsigned long wifiCheckInterval = 30000;
 
@@ -27,7 +120,6 @@ void streamCallback(FirebaseStream data);
 void streamTimeoutCallback(bool timeout);
 void processCommand(String command);
 void connectToFirebase();
-void connectWiFi();
 void checkWiFiConnection();
 void moveForward();
 void moveBackward();
@@ -47,7 +139,7 @@ long getDistance(int trig, int echo);
 
 // Pump pin
 #define PUMP_PIN 23
- 
+
 // Ultrasonic sensors
 #define TRIG_FRONT 4
 #define ECHO_FRONT 5
@@ -98,49 +190,61 @@ void connectToFirebase() {
   }
 }
 
-// --- WiFi Connection Management ---
-void connectWiFi() {
-  Serial.println("Connecting to WiFi...");
-  
-  WiFi.begin(ssid, password);
-  
-  // Wait up to 20 seconds for connection
-  unsigned long startAttemptTime = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 20000) {
-      delay(500);
-      Serial.print(".");
-  }
-  
-  if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("\nConnected to WiFi");
-      Serial.print("IP address: ");
-      Serial.println(WiFi.localIP());
-      Serial.println("WiFi connected: ");
-      Serial.println(WiFi.localIP().toString());
-  } else {
-      Serial.println("\nFailed to connect to WiFi");
-  }
-}
-
 void checkWiFiConnection() {
   if (WiFi.status() != WL_CONNECTED) {
       Serial.println("WiFi disconnected. Reconnecting...");
       WiFi.disconnect();
       delay(1000);
-      connectWiFi();
+      WiFi.begin(storedSSID.c_str(), storedPassword.c_str());
   } else {
       stopMotors();
       Serial.println("WiFi is connected. No action needed.");
   }
 }
 
+void loadConfig() {
+  preferences.begin("config", true);
+  storedSSID = preferences.getString("ssid", "");
+  storedPassword = preferences.getString("password", "");
+  preferences.end();
+}
+
 void setup() {
   Serial.begin(115200);
+  loadConfig();
 
-  // Connect to WiFi
-  connectWiFi();
-
-  connectToFirebase();
+  if (storedSSID == "") {
+    Serial.println("No WiFi credentials found, starting configuration portal.");
+    configMode = true;
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP("ESP32-Config");
+    mainConfigServer();
+    return;
+  } else {
+    // Attempt to connect to WiFi in STA mode.
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(storedSSID.c_str(), storedPassword.c_str());
+    Serial.print("Connecting to WiFi");
+    unsigned long startAttemptTime = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 15000) {
+      Serial.print(".");
+      delay(500);
+    }
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("\nFailed to connect. Starting configuration portal.");
+      configMode = true;
+      WiFi.mode(WIFI_AP);
+      WiFi.softAP("ESP32-Config");
+      mainConfigServer();
+      return;
+    } else {
+      Serial.println();
+      Serial.print("Connected! IP address: ");
+      Serial.println(WiFi.localIP());
+      mainConfigServer();
+      connectToFirebase();
+    }
+  }
 
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
@@ -160,12 +264,14 @@ void setup() {
 }
 
 void loop() {
+  server.handleClient();
+  if (configMode) return;
 
   // Check and maintain WiFi connection
   if (millis() - lastWifiCheckTime > wifiCheckInterval) {
     checkWiFiConnection();
     lastWifiCheckTime = millis();
-}
+  }
 
   if (Serial.available()) {
     char cmd = Serial.read();

@@ -4,11 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Play, Trash2, Ruler, Download, Info, Save, FolderOpen } from 'lucide-react';
+import { Play, Trash2, Ruler, Download, Info, Save, FolderOpen, Settings } from 'lucide-react';
 import { database } from '@/firebase/firebaseConfig';
 import PageContainer from '@/components/layout/PageContainer';
 import { toast } from 'sonner';
 import { ref, set, get, child } from 'firebase/database';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 // Constants for ESP32 mapping and UI scale
 const BOX_SIZE_CM = 10; // Each grid square is 10cm x 10cm
@@ -23,10 +32,10 @@ const ESP32_SPEED_PATH = `${ESP32_TRIGGERS_PATH}/speed`;
 // Routes Firebase path
 const ROUTES_PATH = "esp32_cleaning_bot/saved_routes";
 
-// Command execution constants
-const COMMAND_DELAY_MS = 100; // Minimum delay between commands (ms)
-const CM_TO_MS_FACTOR = 150;  // Milliseconds per cm of movement (at full speed)
-const TURN_DURATION_MS = 1050; // Duration for a turn (ms)
+// Command execution constants - default values
+const DEFAULT_COMMAND_DELAY_MS = 100; // Minimum delay between commands (ms)
+const DEFAULT_CM_TO_MS_FACTOR = 150;  // Milliseconds per cm of movement (at full speed)
+const DEFAULT_TURN_DURATION_MS = 1000; // Duration for a turn (ms)
 
 // Helper to pause execution for given ms
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -53,6 +62,12 @@ const MainAutonomous = () => {
     totalDistanceCM: 0,
   });
   const [botSpeed, setBotSpeed] = useState(128);
+
+  // Command execution settings state
+  const [commandDelayMs, setCommandDelayMs] = useState(DEFAULT_COMMAND_DELAY_MS);
+  const [cmToMsFactor, setCmToMsFactor] = useState(DEFAULT_CM_TO_MS_FACTOR);
+  const [turnDurationMs, setTurnDurationMs] = useState(DEFAULT_TURN_DURATION_MS);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Firebase and stage/container refs
   const stageRef = useRef(null);
@@ -123,8 +138,8 @@ const MainAutonomous = () => {
       const distanceMeters = distanceCM / 100;
       const numTurns = lines.length;
       const speedFactor = botSpeed / 128;
-      const moveTime = (distanceCM * CM_TO_MS_FACTOR / 1000) / speedFactor;
-      const turnTime = numTurns * (TURN_DURATION_MS / 1000);
+      const moveTime = (distanceCM * cmToMsFactor / 1000) / speedFactor;
+      const turnTime = numTurns * (turnDurationMs / 1000);
       setRouteStats({
         totalDistance: distanceMeters.toFixed(2),
         totalDistanceCM: Math.round(distanceCM),
@@ -133,7 +148,7 @@ const MainAutonomous = () => {
     } else {
       setRouteStats({ totalDistance: 0, totalDistanceCM: 0, estimatedTime: 0 });
     }
-  }, [lines, botSpeed]);
+  }, [lines, botSpeed, cmToMsFactor, turnDurationMs]);
 
   // Load robot image and handle resizing based on screen size
   useEffect(() => {
@@ -347,7 +362,7 @@ const MainAutonomous = () => {
   // Calculate the duration based on distance (in cm) and bot speed.
   const calculateDuration = (distanceCM) => {
     const speedRatio = botSpeed / 255;
-    return Math.max(COMMAND_DELAY_MS, Math.round(distanceCM * CM_TO_MS_FACTOR / speedRatio));
+    return Math.max(commandDelayMs, Math.round(distanceCM * cmToMsFactor / speedRatio));
   };
 
   // Convert drawn lines into an array of instructions for the ESP32.
@@ -385,20 +400,20 @@ const MainAutonomous = () => {
           instructions.push({
             type: 'turn',
             command: turnCommand,
-            duration: TURN_DURATION_MS,
+            duration: turnDurationMs,
             coords: { x1, y1, x2, y2 }
           });
         } else if (newDirection === "south") {
           instructions.push({
             type: 'turn',
             command: 'R',
-            duration: TURN_DURATION_MS,
+            duration: turnDurationMs,
             coords: { x1, y1, x2, y2 }
           });
           instructions.push({
             type: 'turn',
             command: 'R',
-            duration: TURN_DURATION_MS,
+            duration: turnDurationMs,
             coords: { x1, y1, x2, y2 }
           });
         }
@@ -422,7 +437,7 @@ const MainAutonomous = () => {
         instructions.push({
           type: 'turn',
           command: turnCommand,
-          duration: TURN_DURATION_MS,
+          duration: turnDurationMs,
           coords: { x1, y1, x2, y2 }
         });
         
@@ -529,7 +544,7 @@ const MainAutonomous = () => {
         // If more instructions remain, send a stop command before continuing
         if (i < instructions.length - 1) {
           await set(ref(database, ESP32_COMMAND_PATH), "S");
-          await sleep(300);
+          await sleep(commandDelayMs);
         }
       }
       // Final stop command after completing instructions
@@ -615,6 +630,84 @@ const MainAutonomous = () => {
     }
   };
 
+  // Settings dialog for command execution constants
+  const SettingsDialog = () => {
+    const [localCommandDelay, setLocalCommandDelay] = useState(commandDelayMs);
+    const [localCmToMsFactor, setLocalCmToMsFactor] = useState(cmToMsFactor);
+    const [localTurnDuration, setLocalTurnDuration] = useState(turnDurationMs);
+
+    const handleSaveSettings = () => {
+      setCommandDelayMs(parseInt(localCommandDelay));
+      setCmToMsFactor(parseInt(localCmToMsFactor));
+      setTurnDurationMs(parseInt(localTurnDuration));
+      setSettingsOpen(false);
+      toast.success("Settings saved successfully");
+    };
+
+    const handleResetToDefaults = () => {
+      setLocalCommandDelay(DEFAULT_COMMAND_DELAY_MS);
+      setLocalCmToMsFactor(DEFAULT_CM_TO_MS_FACTOR);
+      setLocalTurnDuration(DEFAULT_TURN_DURATION_MS);
+    };
+
+    return (
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Bot Movement Settings</DialogTitle>
+            <DialogDescription>
+              Adjust timing parameters for robot movement execution
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="commandDelay" className="text-right">
+                Command Delay (ms)
+              </Label>
+              <Input
+                id="commandDelay"
+                type="number"
+                value={localCommandDelay}
+                onChange={(e) => setLocalCommandDelay(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="cmToMsFactor" className="text-right">
+                MS per CM Factor
+              </Label>
+              <Input
+                id="cmToMsFactor"
+                type="number"
+                value={localCmToMsFactor}
+                onChange={(e) => setLocalCmToMsFactor(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="turnDuration" className="text-right">
+                Turn Duration (ms)
+              </Label>
+              <Input
+                id="turnDuration"
+                type="number"
+                value={localTurnDuration}
+                onChange={(e) => setLocalTurnDuration(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleResetToDefaults}>
+              Reset to Defaults
+            </Button>
+            <Button onClick={handleSaveSettings}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
   return (
     <PageContainer scrollable>
       <div className="space-y-4">
@@ -622,9 +715,14 @@ const MainAutonomous = () => {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between text-base sm:text-lg">
               <span>Autonomous Route Planning</span>
-              <Button variant="ghost" size="sm" onClick={() => setShowScaleInfo(!showScaleInfo)}>
-                <Info className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center space-x-2">
+                <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>
+                  <Settings className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setShowScaleInfo(!showScaleInfo)}>
+                  <Info className="h-4 w-4" />
+                </Button>
+              </div>
             </CardTitle>
             {isDrawing && (
               <div className="text-xs sm:text-sm font-normal text-muted-foreground">
@@ -882,6 +980,7 @@ const MainAutonomous = () => {
           </CardContent>
         </Card>
       </div>
+      <SettingsDialog />
     </PageContainer>
   );
 };
