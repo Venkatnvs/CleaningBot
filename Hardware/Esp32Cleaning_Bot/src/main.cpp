@@ -13,6 +13,15 @@ bool configMode = false;
 WebServer server(80);
 Preferences preferences;
 
+// Autonomous mode variables
+bool autonomousMode = false;
+unsigned long lastAutonomousActionTime = 0;
+int autonomousState = 0;
+const int MIN_DISTANCE_FRONT = 50;  // cm
+const int MIN_DISTANCE_SIDE = 35;   // cm
+const int MAX_WALL_FOLLOW_DISTANCE = 40; // cm
+const unsigned long AUTONOMOUS_ACTION_INTERVAL = 500; // milliseconds between actions
+
 void handleRoot() {
   // This is the configuration page if no credentials are set or you want to reconfigure.
   String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>";
@@ -127,6 +136,7 @@ void turnLeft();
 void turnRight();
 void stopMotors();
 long getDistance(int trig, int echo);
+void handleAutonomousMode();
 
 // Motor direction pins
 #define IN1 13
@@ -197,7 +207,6 @@ void checkWiFiConnection() {
       delay(1000);
       WiFi.begin(storedSSID.c_str(), storedPassword.c_str());
   } else {
-      stopMotors();
       Serial.println("WiFi is connected. No action needed.");
   }
 }
@@ -273,6 +282,11 @@ void loop() {
     lastWifiCheckTime = millis();
   }
 
+  // Handle autonomous mode if active
+  if (autonomousMode) {
+    handleAutonomousMode();
+  }
+
   if (Serial.available()) {
     char cmd = Serial.read();
 
@@ -287,9 +301,17 @@ void loop() {
     } else if (cmd == 'S') {
       stopMotors();
     } else if (cmd == 'W') {
-      digitalWrite(PUMP_PIN, HIGH);
+      analogWrite(PUMP_PIN, 170);
     } else if (cmd == 'w') {
       digitalWrite(PUMP_PIN, LOW);
+    } else if (cmd == 'A') {
+      autonomousMode = true;
+      autonomousState = 0;
+      Serial.println("Autonomous mode activated");
+    } else if (cmd == 'a') {
+      autonomousMode = false;
+      stopMotors();
+      Serial.println("Autonomous mode deactivated");
     }
 
     // Speed control
@@ -305,13 +327,111 @@ void loop() {
 
     analogWrite(SPEED_PIN, currentSpeed); // Apply updated speed
   }
+}
 
-  // Print ultrasonic sensor readings
-  Serial.print("Front: "); Serial.print(getDistance(TRIG_FRONT, ECHO_FRONT));
-  Serial.print(" cm, Left: "); Serial.print(getDistance(TRIG_LEFT, ECHO_LEFT));
-  Serial.print(" cm, Right: "); Serial.println(getDistance(TRIG_RIGHT, ECHO_RIGHT));
-
-  delay(500);
+// Autonomous navigation logic
+void handleAutonomousMode() {
+  if (millis() - lastAutonomousActionTime < AUTONOMOUS_ACTION_INTERVAL) {
+    return; // Not enough time has passed since last action
+  }
+  
+  lastAutonomousActionTime = millis();
+  
+  // Get sensor readings
+  long frontDistance = getDistance(TRIG_FRONT, ECHO_FRONT);
+  long leftDistance = getDistance(TRIG_LEFT, ECHO_LEFT);
+  long rightDistance = getDistance(TRIG_RIGHT, ECHO_RIGHT);
+  
+  // Print sensor readings in autonomous mode
+  Serial.print("AUTO - Front: "); Serial.print(frontDistance);
+  Serial.print(" cm, Left: "); Serial.print(leftDistance);
+  Serial.print(" cm, Right: "); Serial.print(rightDistance);
+  Serial.print(" cm, State: "); Serial.println(autonomousState);
+  
+  // State machine for autonomous navigation
+  switch (autonomousState) {
+    case 0: // Moving forward
+      if (frontDistance > 0 && frontDistance < MIN_DISTANCE_FRONT) {
+        // Obstacle detected in front, decide which way to turn
+        stopMotors();
+        
+        // Alternate between right and left turns
+        if (rightDistance > leftDistance) {
+          autonomousState = 1; // Turn right
+          Serial.println("AUTO: Obstacle ahead, turning right");
+        } else {
+          autonomousState = 3; // Turn left
+          Serial.println("AUTO: Obstacle ahead, turning left");
+        }
+      } else {
+        // No obstacle ahead, keep moving forward
+        moveForward();
+        
+        // Check if we need to adjust to follow walls
+        if (leftDistance > 0 && leftDistance < MAX_WALL_FOLLOW_DISTANCE) {
+          // Left wall detected, adjust to follow it
+          if (leftDistance < MIN_DISTANCE_SIDE) {
+            // Too close to left wall, veer slightly right
+            turnRight();
+            delay(100);
+            moveForward();
+          }
+        } else if (rightDistance > 0 && rightDistance < MAX_WALL_FOLLOW_DISTANCE) {
+          // Right wall detected, adjust to follow it
+          if (rightDistance < MIN_DISTANCE_SIDE) {
+            // Too close to right wall, veer slightly left
+            turnLeft();
+            delay(100);
+            moveForward();
+          }
+        }
+      }
+      break;
+      
+    case 1: // Turning right
+      turnRight();
+      delay(500); // Turn for a set amount of time
+      autonomousState = 2; // Move forward until wall on left
+      break;
+      
+    case 2: // Moving forward looking for left wall
+      moveForward();
+      if (leftDistance > 0 && leftDistance < MAX_WALL_FOLLOW_DISTANCE) {
+        // Left wall detected, start following it
+        autonomousState = 0;
+        Serial.println("AUTO: Left wall found, resuming normal navigation");
+      }
+      
+      // Check if there's an obstacle ahead
+      if (frontDistance > 0 && frontDistance < MIN_DISTANCE_FRONT) {
+        stopMotors();
+        autonomousState = 3; // Turn left next
+        Serial.println("AUTO: Obstacle ahead during right search, turning left");
+      }
+      break;
+      
+    case 3: // Turning left
+      turnLeft();
+      delay(500); // Turn for a set amount of time
+      autonomousState = 4; // Move forward until wall on right
+      break;
+      
+    case 4: // Moving forward looking for right wall
+      moveForward();
+      if (rightDistance > 0 && rightDistance < MAX_WALL_FOLLOW_DISTANCE) {
+        // Right wall detected, start following it
+        autonomousState = 0;
+        Serial.println("AUTO: Right wall found, resuming normal navigation");
+      }
+      
+      // Check if there's an obstacle ahead
+      if (frontDistance > 0 && frontDistance < MIN_DISTANCE_FRONT) {
+        stopMotors();
+        autonomousState = 1; // Turn right next
+        Serial.println("AUTO: Obstacle ahead during left search, turning right");
+      }
+      break;
+  }
 }
 
 // Movement functions
@@ -351,32 +471,47 @@ long getDistance(int trig, int echo) {
 
 void processCommand(String command) {
   if (command == "F"){
+    autonomousMode = false; // Disable autonomous mode when manual command received
     moveForward();
     Serial.println("Moving forward");
   }
   else if (command == "B"){
+    autonomousMode = false;
     moveBackward();
     Serial.println("Moving backward");
   }
   else if (command == "L"){
+    autonomousMode = false;
     turnLeft();
     Serial.println("Turning left");
   }
   else if (command == "R"){
+    autonomousMode = false;
     turnRight();
     Serial.println("Turning right");
   }
   else if (command == "S"){
+    autonomousMode = false;
     stopMotors();
     Serial.println("Stopped");
   }
   else if (command == "W"){
-    digitalWrite(PUMP_PIN, HIGH);
+    analogWrite(PUMP_PIN, 170);
     Serial.println("Pump ON");
   }
   else if (command == "w"){
     digitalWrite(PUMP_PIN, LOW);
     Serial.println("Pump OFF");
+  }
+  else if (command == "at"){
+    autonomousMode = true;
+    autonomousState = 0;
+    Serial.println("Autonomous mode activated");
+  }
+  else if (command == "st"){
+    autonomousMode = false;
+    stopMotors();
+    Serial.println("Autonomous mode deactivated");
   }
   else if (command == "speed"){
     String speedPath = mainPath;
@@ -390,8 +525,7 @@ void processCommand(String command) {
       currentSpeed = fbdo.intData();
       analogWrite(SPEED_PIN, currentSpeed);
       Serial.printf("Speed set to: %d\n", currentSpeed);
-      Serial.println("Failed to get speed value from Firebase");
-    } 
+    }
     {
       String newCommandPath = mainPath;
       newCommandPath += "/triggers/command";
@@ -402,7 +536,9 @@ void processCommand(String command) {
   else {
     Serial.println("Unknown command: ");
     Serial.println(command);
-    stopMotors();
+    if (!autonomousMode) {
+      stopMotors();
+    }
   }
 }
 

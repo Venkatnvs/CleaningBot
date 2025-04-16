@@ -6,7 +6,9 @@ import {
   ArrowRight,
   Wifi,
   AlertTriangle,
-  Square
+  Square,
+  DrumIcon,
+  WavesIcon
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +23,7 @@ const LiveControlPage = () => {
   const [status, setStatus] = useState('');
   const [speed, setSpeed] = useState(128);
   const [motorOn, setMotorOn] = useState(false);
+  const [autonomousMode, setAutonomousMode] = useState(false);
   const [showStatusMessage, setShowStatusMessage] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
 
@@ -37,6 +40,23 @@ const LiveControlPage = () => {
       });
     } catch (error) {
       setStatus('Error toggling motor');
+      console.error(error);
+    }
+  };
+
+  const toggleAutonomousMode = async () => {
+    const newState = !autonomousMode;
+    setAutonomousMode(newState);
+
+    try {
+      const autoRef = ref(database, 'esp32_cleaning_bot/triggers');
+      await set(autoRef, {
+        command: newState ? 'at' : 'st',
+        speed: speed,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      setStatus('Error toggling autonomous mode');
       console.error(error);
     }
   };
@@ -253,7 +273,9 @@ const LiveControlPage = () => {
   const MotorStatus = () => {
     return (
       <div className="space-y-3">
-        <h3 className="text-sm font-medium">Motor Status</h3>
+        <h3 className="text-sm font-medium">Motor Status
+          <WavesIcon className="inline-block ml-2" size={15} />
+        </h3>
         <div className="flex justify-between items-center">
           <span className="text-md text-muted-foreground">
             {motorOn ? 'Running' : 'Stopped'}
@@ -265,6 +287,36 @@ const LiveControlPage = () => {
             size="sm"
           >
             {motorOn ? (
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+                Turn Off
+              </span>
+            ) : (
+              "Turn On"
+            )}
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const Autonomous = () => {
+    return (
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium">Autonomous Mode 
+          <DrumIcon size={15} className="inline-block ml-2" />
+        </h3>
+        <div className="flex justify-between items-center">
+          <span className="text-md text-muted-foreground">
+            {autonomousMode ? 'Running' : 'Stopped'}
+          </span>
+          <Button 
+            onClick={toggleAutonomousMode}
+            variant={autonomousMode ? "default" : "outline"}
+            className={`transition-all duration-200 px-4 py-6 text-xl ${autonomousMode ? "bg-green-600 hover:bg-green-700" : "border-red-200 text-red-700 hover:bg-red-50"}`}
+            size="sm"
+          >
+            {autonomousMode ? (
               <span className="flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
                 Turn Off
@@ -351,6 +403,8 @@ const LiveControlPage = () => {
           <Card>
             <CardContent className="space-y-6">
               <SpeedControl />
+              <Separator className="my-6" />
+              <Autonomous/>
               <Separator className="my-6" />
               <MotorStatus />
             </CardContent>
