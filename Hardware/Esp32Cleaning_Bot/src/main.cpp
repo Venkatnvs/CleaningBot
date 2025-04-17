@@ -17,10 +17,19 @@ Preferences preferences;
 bool autonomousMode = false;
 unsigned long lastAutonomousActionTime = 0;
 int autonomousState = 0;
-const int MIN_DISTANCE_FRONT = 50;  // cm
-const int MIN_DISTANCE_SIDE = 35;   // cm
-const int MAX_WALL_FOLLOW_DISTANCE = 40; // cm
-const unsigned long AUTONOMOUS_ACTION_INTERVAL = 500; // milliseconds between actions
+const int MIN_DISTANCE_FRONT = 25;  // cm - minimum safe distance in front
+const int MIN_DISTANCE_SIDE = 15;   // cm - minimum safe distance on sides
+const int MAX_WALL_FOLLOW_DISTANCE = 40; // cm - maximum distance to consider wall following
+const unsigned long AUTONOMOUS_ACTION_INTERVAL = 300; // milliseconds between actions
+
+// Motor cycle timing in autonomous mode
+const unsigned long MOTOR_ON_INTERVAL = 5000;  // 5 seconds
+bool is_motor_triggred = false;
+
+// Safety override for manual control
+bool safetyOverride = false;
+unsigned long lastSafetyCheckTime = 0;
+const unsigned long SAFETY_CHECK_INTERVAL = 200; // milliseconds
 
 void handleRoot() {
   // This is the configuration page if no credentials are set or you want to reconfigure.
@@ -137,6 +146,9 @@ void turnRight();
 void stopMotors();
 long getDistance(int trig, int echo);
 void handleAutonomousMode();
+void checkSafety();
+void handleObstacleAvoidance();
+void handleMotorCycle();
 
 // Motor direction pins
 #define IN1 13
@@ -159,6 +171,7 @@ void handleAutonomousMode();
 #define ECHO_RIGHT 22
 
 int currentSpeed = 150;
+String lastCommand = "S"; // Store the last command for safety override
 
 void connectToFirebase() {
   // Configure Firebase
@@ -269,7 +282,7 @@ void setup() {
   pinMode(TRIG_LEFT, OUTPUT);  pinMode(ECHO_LEFT, INPUT);
   pinMode(TRIG_RIGHT, OUTPUT); pinMode(ECHO_RIGHT, INPUT);
 
-  Serial.println("Bot ready with analogWrite speed control.");
+  Serial.println("Bot ready with analogWrite speed control and collision avoidance.");
 }
 
 void loop() {
@@ -282,8 +295,15 @@ void loop() {
     lastWifiCheckTime = millis();
   }
 
+  // Check safety periodically even in manual mode
+  if (millis() - lastSafetyCheckTime > SAFETY_CHECK_INTERVAL) {
+    checkSafety();
+    lastSafetyCheckTime = millis();
+  }
+
   // Handle autonomous mode if active
   if (autonomousMode) {
+    handleMotorCycle(); // Handle motor cycle in autonomous mode
     handleAutonomousMode();
   }
 
@@ -291,26 +311,41 @@ void loop() {
     char cmd = Serial.read();
 
     if (cmd == 'F') {
+      lastCommand = "F";
       moveForward();
+      safetyOverride = false; // Reset safety override when new command is received
     } else if (cmd == 'B') {
+      lastCommand = "B";
       moveBackward();
+      safetyOverride = false;
     } else if (cmd == 'L') {
+      lastCommand = "L";
       turnLeft();
+      safetyOverride = false;
     } else if (cmd == 'R') {
+      lastCommand = "R";
       turnRight();
+      safetyOverride = false;
     } else if (cmd == 'S') {
+      lastCommand = "S";
       stopMotors();
+      safetyOverride = false;
     } else if (cmd == 'W') {
-      analogWrite(PUMP_PIN, 170);
+      analogWrite(PUMP_PIN, 90);
     } else if (cmd == 'w') {
-      digitalWrite(PUMP_PIN, LOW);
+      analogWrite(PUMP_PIN, 0);
     } else if (cmd == 'A') {
       autonomousMode = true;
       autonomousState = 0;
+      safetyOverride = false;
+      is_motor_triggred = false;
       Serial.println("Autonomous mode activated");
     } else if (cmd == 'a') {
       autonomousMode = false;
+      is_motor_triggred = false; // Stop the motor cycle
       stopMotors();
+      analogWrite(PUMP_PIN, 0); // Ensure pump is off when leaving autonomous mode
+      safetyOverride = false;
       Serial.println("Autonomous mode deactivated");
     }
 
@@ -326,6 +361,116 @@ void loop() {
     }
 
     analogWrite(SPEED_PIN, currentSpeed); // Apply updated speed
+  }
+}
+
+// Handle motor on/off cycle in autonomous mode
+void handleMotorCycle() {
+    if (!is_motor_triggred){
+      analogWrite(PUMP_PIN, 90);
+      Serial.println("AUTO: Pump turned ON in cycle");
+      delay(MOTOR_ON_INTERVAL);
+      analogWrite(PUMP_PIN, 0);
+      Serial.println("AUTO: Pump turned OFF in cycle");
+      is_motor_triggred = true;
+    }
+}
+
+// Safety check function for both manual and autonomous modes
+void checkSafety() {
+  long frontDistance = getDistance(TRIG_FRONT, ECHO_FRONT);
+  long leftDistance = getDistance(TRIG_LEFT, ECHO_LEFT);
+  long rightDistance = getDistance(TRIG_RIGHT, ECHO_RIGHT);
+  
+  // Print sensor readings periodically
+  Serial.print("Safety - Front: "); Serial.print(frontDistance);
+  Serial.print(" cm, Left: "); Serial.print(leftDistance);
+  Serial.print(" cm, Right: "); Serial.print(rightDistance);
+  Serial.print(" cm, Mode: "); Serial.println(autonomousMode ? "AUTO" : "MANUAL");
+  
+  // Only apply safety in manual mode if not in autonomous mode
+  if (!autonomousMode) {
+    // Check for obstacles in front while moving forward
+    if (lastCommand == "F" && frontDistance > 0 && frontDistance < MIN_DISTANCE_FRONT) {
+      if (!safetyOverride) {
+        stopMotors();
+        Serial.println("SAFETY: Obstacle detected in front! Stopping.");
+        safetyOverride = true;
+        handleObstacleAvoidance();
+      }
+    }
+    // Check for obstacles on sides while turning
+    else if (lastCommand == "L" && leftDistance > 0 && leftDistance < MIN_DISTANCE_SIDE) {
+      if (!safetyOverride) {
+        stopMotors();
+        Serial.println("SAFETY: Obstacle detected on left! Stopping.");
+        safetyOverride = true;
+        handleObstacleAvoidance();
+      }
+    } 
+    else if (lastCommand == "R" && rightDistance > 0 && rightDistance < MIN_DISTANCE_SIDE) {
+      if (!safetyOverride) {
+        stopMotors();
+        Serial.println("SAFETY: Obstacle detected on right! Stopping.");
+        safetyOverride = true;
+        handleObstacleAvoidance();
+      }
+    }
+    // If path is clear after a safety override, reset the override
+    else if (safetyOverride && 
+           (frontDistance <= 0 || frontDistance >= MIN_DISTANCE_FRONT) &&
+           (leftDistance <= 0 || leftDistance >= MIN_DISTANCE_SIDE) &&
+           (rightDistance <= 0 || rightDistance >= MIN_DISTANCE_SIDE)) {
+      safetyOverride = false;
+    }
+  }
+}
+
+// Handle obstacle avoidance in manual mode
+void handleObstacleAvoidance() {
+  long frontDistance = getDistance(TRIG_FRONT, ECHO_FRONT);
+  long leftDistance = getDistance(TRIG_LEFT, ECHO_LEFT);
+  long rightDistance = getDistance(TRIG_RIGHT, ECHO_RIGHT);
+  
+  // Stop first for safety
+  stopMotors();
+  delay(500);
+  
+  // If obstacle in front, decide which way to turn
+  if (frontDistance > 0 && frontDistance < MIN_DISTANCE_FRONT) {
+    if (rightDistance > leftDistance) {
+      // More space on right, turn right
+      Serial.println("SAFETY: Avoiding by turning right");
+      turnRight();
+      delay(800); // Turn for a bit longer to clear the obstacle
+    } else {
+      // More space on left, turn left
+      Serial.println("SAFETY: Avoiding by turning left");
+      turnLeft();
+      delay(800); // Turn for a bit longer to clear the obstacle
+    }
+  }
+  // If obstacle on left, turn right slightly
+  else if (leftDistance > 0 && leftDistance < MIN_DISTANCE_SIDE) {
+    Serial.println("SAFETY: Avoiding left obstacle");
+    turnRight();
+    delay(500);
+  }
+  // If obstacle on right, turn left slightly
+  else if (rightDistance > 0 && rightDistance < MIN_DISTANCE_SIDE) {
+    Serial.println("SAFETY: Avoiding right obstacle");
+    turnLeft();
+    delay(500);
+  }
+  
+  stopMotors(); // Stop after avoidance maneuver
+  
+  // Update Firebase that we've overridden the command
+  if (Firebase.ready()) {
+    String newCommandPath = mainPath;
+    newCommandPath += "/triggers/command";
+    Firebase.RTDB.setString(&fbdo, newCommandPath, "S"); // Tell Firebase we're now stopped
+    Serial.println("Command reset to 'S' after safety override.");
   }
 }
 
@@ -390,7 +535,7 @@ void handleAutonomousMode() {
       
     case 1: // Turning right
       turnRight();
-      delay(500); // Turn for a set amount of time
+      delay(600); // Turn for a set amount of time
       autonomousState = 2; // Move forward until wall on left
       break;
       
@@ -412,7 +557,7 @@ void handleAutonomousMode() {
       
     case 3: // Turning left
       turnLeft();
-      delay(500); // Turn for a set amount of time
+      delay(600); // Turn for a set amount of time
       autonomousState = 4; // Move forward until wall on right
       break;
       
@@ -472,45 +617,60 @@ long getDistance(int trig, int echo) {
 void processCommand(String command) {
   if (command == "F"){
     autonomousMode = false; // Disable autonomous mode when manual command received
+    lastCommand = "F";
     moveForward();
+    safetyOverride = false;
     Serial.println("Moving forward");
   }
   else if (command == "B"){
     autonomousMode = false;
+    lastCommand = "B";
     moveBackward();
+    safetyOverride = false;
     Serial.println("Moving backward");
   }
   else if (command == "L"){
     autonomousMode = false;
+    lastCommand = "L";
     turnLeft();
+    safetyOverride = false;
     Serial.println("Turning left");
   }
   else if (command == "R"){
     autonomousMode = false;
+    lastCommand = "R";
     turnRight();
+    safetyOverride = false;
     Serial.println("Turning right");
   }
   else if (command == "S"){
     autonomousMode = false;
+    lastCommand = "S";
     stopMotors();
+    safetyOverride = false;
     Serial.println("Stopped");
   }
   else if (command == "W"){
-    analogWrite(PUMP_PIN, 170);
+    analogWrite(PUMP_PIN, 90);
     Serial.println("Pump ON");
   }
   else if (command == "w"){
-    digitalWrite(PUMP_PIN, LOW);
+    analogWrite(PUMP_PIN, 0);
     Serial.println("Pump OFF");
   }
   else if (command == "at"){
     autonomousMode = true;
     autonomousState = 0;
+    safetyOverride = false;
+    is_motor_triggred = false;
     Serial.println("Autonomous mode activated");
   }
   else if (command == "st"){
     autonomousMode = false;
+    is_motor_triggred = false; // Stop the motor cycle
     stopMotors();
+    analogWrite(PUMP_PIN, 0); // Ensure pump is off when leaving autonomous mode
+    safetyOverride = false;
     Serial.println("Autonomous mode deactivated");
   }
   else if (command == "speed"){

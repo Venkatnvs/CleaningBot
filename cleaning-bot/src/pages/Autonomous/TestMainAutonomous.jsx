@@ -89,8 +89,19 @@ const MainAutonomous = () => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    
+    // Debounce the resize handler to prevent multiple rapid calls
+    let resizeTimeout;
+    const debouncedResize = () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(handleResize, 100);
+    };
+    
+    window.addEventListener('resize', debouncedResize);
+    return () => {
+      clearTimeout(resizeTimeout);
+      window.removeEventListener('resize', debouncedResize);
+    };
   }, []);
 
   // Ensure stop command is sent on mount/unmount
@@ -636,6 +647,15 @@ const MainAutonomous = () => {
     const [localCmToMsFactor, setLocalCmToMsFactor] = useState(cmToMsFactor);
     const [localTurnDuration, setLocalTurnDuration] = useState(turnDurationMs);
 
+    // Reset local state when dialog opens
+    useEffect(() => {
+      if (settingsOpen) {
+        setLocalCommandDelay(commandDelayMs);
+        setLocalCmToMsFactor(cmToMsFactor);
+        setLocalTurnDuration(turnDurationMs);
+      }
+    }, [settingsOpen, commandDelayMs, cmToMsFactor, turnDurationMs]);
+
     const handleSaveSettings = () => {
       setCommandDelayMs(parseInt(localCommandDelay));
       setCmToMsFactor(parseInt(localCmToMsFactor));
@@ -650,16 +670,31 @@ const MainAutonomous = () => {
       setLocalTurnDuration(DEFAULT_TURN_DURATION_MS);
     };
 
+    const handleOpenChange = (open) => {
+      // Prevent closing if tapping inside the dialog
+      if (!open) {
+        // Add a small delay to prevent instant reopening
+        setTimeout(() => setSettingsOpen(false), 50);
+      } else {
+        setSettingsOpen(true);
+      }
+    };
+
     return (
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+      <Dialog open={settingsOpen} onOpenChange={handleOpenChange}>
+        <DialogContent className="sm:max-w-[425px]" onPointerDownOutside={(e) => {
+          // Prevent closing on touch inside the dialog content
+          if (e.target && e.target.closest('.dialog-content')) {
+            e.preventDefault();
+          }
+        }}>
           <DialogHeader>
             <DialogTitle>Bot Movement Settings</DialogTitle>
             <DialogDescription>
               Adjust timing parameters for robot movement execution
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 dialog-content">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="commandDelay" className="text-right">
                 Command Delay (ms)
