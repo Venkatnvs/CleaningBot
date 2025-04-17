@@ -648,11 +648,6 @@ const MainAutonomous = () => {
     const localCmToMsFactorRef = useRef(cmToMsFactor);
     const localTurnDurationRef = useRef(turnDurationMs);
     
-    // Add refs for input fields to explicitly focus them
-    const commandDelayInputRef = useRef(null);
-    const cmToMsFactorInputRef = useRef(null);
-    const turnDurationInputRef = useRef(null);
-    
     // Update refs when dialog opens
     useEffect(() => {
       if (settingsOpen) {
@@ -716,9 +711,14 @@ const MainAutonomous = () => {
     if (isMobile) {
       if (!settingsOpen) return null;
       
+      // Use a simple form that's optimized for mobile
       return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-background rounded-lg w-full max-w-sm p-4 shadow-lg">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex flex-col justify-center p-4" 
+          style={{touchAction: "none"}}
+          onTouchMove={(e) => e.preventDefault()}
+        >
+          <div className="bg-background rounded-lg w-full max-w-sm mx-auto p-4 shadow-lg">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-lg">Bot Movement Settings</h3>
               <Button 
@@ -731,73 +731,81 @@ const MainAutonomous = () => {
               </Button>
             </div>
             
-            <div className="grid gap-4 py-2">
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveSettings();
+              }}
+              className="grid gap-4 py-2"
+            >
               <div className="space-y-2">
-                <Label htmlFor="mobileCommandDelay">Command Delay (ms)</Label>
-                <Input
+                <Label htmlFor="mobileCommandDelay" className="block mb-1">Command Delay (ms)</Label>
+                <input
                   id="mobileCommandDelay"
-                  ref={commandDelayInputRef}
+                  className="w-full p-2 border rounded-md bg-background"
                   type="tel"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   defaultValue={commandDelayMs}
-                  onChange={(e) => localCommandDelayRef.current = e.target.value}
-                  onClick={() => {
-                    // Small delay to ensure the modal is fully rendered
-                    setTimeout(() => {
-                      commandDelayInputRef.current?.focus();
-                    }, 100);
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    localCommandDelayRef.current = e.target.value;
                   }}
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="mobileCmToMsFactor">MS per CM Factor</Label>
-                <Input
+                <Label htmlFor="mobileCmToMsFactor" className="block mb-1">MS per CM Factor</Label>
+                <input
                   id="mobileCmToMsFactor"
-                  ref={cmToMsFactorInputRef}
+                  className="w-full p-2 border rounded-md bg-background"
                   type="tel"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   defaultValue={cmToMsFactor}
-                  onChange={(e) => localCmToMsFactorRef.current = e.target.value}
-                  onClick={() => {
-                    // Small delay to ensure the modal is fully rendered
-                    setTimeout(() => {
-                      cmToMsFactorInputRef.current?.focus();
-                    }, 100);
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    localCmToMsFactorRef.current = e.target.value;
                   }}
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="mobileTurnDuration">Turn Duration (ms)</Label>
-                <Input
+                <Label htmlFor="mobileTurnDuration" className="block mb-1">Turn Duration (ms)</Label>
+                <input
                   id="mobileTurnDuration"
-                  ref={turnDurationInputRef}
+                  className="w-full p-2 border rounded-md bg-background"
                   type="tel"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   defaultValue={turnDurationMs}
-                  onChange={(e) => localTurnDurationRef.current = e.target.value}
-                  onClick={() => {
-                    // Small delay to ensure the modal is fully rendered
-                    setTimeout(() => {
-                      turnDurationInputRef.current?.focus();
-                    }, 100);
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    localTurnDurationRef.current = e.target.value;
                   }}
                 />
               </div>
-            </div>
-            
-            <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={handleResetToDefaults}>
-                Reset
-              </Button>
-              <Button onClick={handleSaveSettings}>
-                Save Changes
-              </Button>
-            </div>
+              
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleResetToDefaults();
+                  }}
+                >
+                  Reset
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       );
