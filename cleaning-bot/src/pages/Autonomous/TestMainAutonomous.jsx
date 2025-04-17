@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { createPortal } from 'react-dom';
 
 // Constants for ESP32 mapping and UI scale
 const BOX_SIZE_CM = 10; // Each grid square is 10cm x 10cm
@@ -709,105 +710,199 @@ const MainAutonomous = () => {
 
     // For mobile devices, use a completely different approach with fixed position
     if (isMobile) {
+      // Don't render anything when closed
       if (!settingsOpen) return null;
       
-      // Use a simple form that's optimized for mobile
-      return (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex flex-col justify-center p-4" 
-          style={{touchAction: "none"}}
-          onTouchMove={(e) => e.preventDefault()}
-        >
-          <div className="bg-background rounded-lg w-full max-w-sm mx-auto p-4 shadow-lg">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-lg">Bot Movement Settings</h3>
-              <Button 
-                variant="ghost" 
-                size="sm" 
+      // Use refs to update the main component state only when form is submitted
+      const formSubmit = () => {
+        try {
+          const cmdDelay = document.getElementById('mobileCommandDelay')?.value;
+          const cmToMs = document.getElementById('mobileCmToMsFactor')?.value;
+          const turnDur = document.getElementById('mobileTurnDuration')?.value;
+          
+          if (cmdDelay) setCommandDelayMs(parseInt(cmdDelay));
+          if (cmToMs) setCmToMsFactor(parseInt(cmToMs));
+          if (turnDur) setTurnDurationMs(parseInt(turnDur));
+          
+          setSettingsOpen(false);
+          toast.success("Settings saved successfully");
+        } catch (e) {
+          console.error(e);
+          toast.error("Failed to save settings");
+        }
+      };
+      
+      const resetValues = () => {
+        try {
+          document.getElementById('mobileCommandDelay').value = DEFAULT_COMMAND_DELAY_MS;
+          document.getElementById('mobileCmToMsFactor').value = DEFAULT_CM_TO_MS_FACTOR;
+          document.getElementById('mobileTurnDuration').value = DEFAULT_TURN_DURATION_MS;
+        } catch (e) {
+          console.error(e);
+        }
+      };
+      
+      // Render a simple HTML dialog that won't be affected by React's event system
+      return createPortal(
+        <div className="dialog-container">
+          <style jsx global>{`
+            .dialog-container {
+              position: fixed;
+              top: 0;
+              left: 0;
+              right: 0;
+              bottom: 0;
+              background: rgba(0, 0, 0, 0.5);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 9999;
+              padding: 16px;
+            }
+            .dialog-content {
+              background: white;
+              border-radius: 8px;
+              width: 100%;
+              max-width: 320px;
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+              overflow: hidden;
+            }
+            .dialog-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 16px;
+              border-bottom: 1px solid #eee;
+            }
+            .dialog-title {
+              font-weight: 600;
+              font-size: 18px;
+              margin: 0;
+            }
+            .dialog-close {
+              background: transparent;
+              border: none;
+              font-size: 24px;
+              cursor: pointer;
+              padding: 0;
+              margin: 0;
+              height: 24px;
+              width: 24px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .dialog-body {
+              padding: 16px;
+            }
+            .form-group {
+              margin-bottom: 16px;
+            }
+            .form-label {
+              display: block;
+              margin-bottom: 8px;
+              font-weight: 500;
+            }
+            .form-input {
+              width: 100%;
+              padding: 8px 12px;
+              border: 1px solid #ddd;
+              border-radius: 4px;
+              font-size: 16px;
+            }
+            .dialog-footer {
+              padding: 16px;
+              display: flex;
+              justify-content: flex-end;
+              gap: 8px;
+              border-top: 1px solid #eee;
+            }
+            .btn {
+              padding: 8px 12px;
+              border-radius: 4px;
+              font-weight: 500;
+              cursor: pointer;
+            }
+            .btn-outline {
+              background: white;
+              border: 1px solid #ddd;
+            }
+            .btn-primary {
+              background: #2563eb;
+              color: white;
+              border: none;
+            }
+          `}</style>
+          <div className="dialog-content">
+            <div className="dialog-header">
+              <h3 className="dialog-title">Bot Movement Settings</h3>
+              <button 
+                className="dialog-close" 
                 onClick={() => setSettingsOpen(false)}
-                className="h-8 w-8 p-0"
               >
-                ✕
-              </Button>
+                ×
+              </button>
             </div>
-            
-            <form 
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSaveSettings();
-              }}
-              className="grid gap-4 py-2"
-            >
-              <div className="space-y-2">
-                <Label htmlFor="mobileCommandDelay" className="block mb-1">Command Delay (ms)</Label>
+            <div className="dialog-body">
+              <div className="form-group">
+                <label className="form-label" htmlFor="mobileCommandDelay">
+                  Command Delay (ms)
+                </label>
                 <input
+                  className="form-input"
                   id="mobileCommandDelay"
-                  className="w-full p-2 border rounded-md bg-background"
                   type="tel"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   defaultValue={commandDelayMs}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    localCommandDelayRef.current = e.target.value;
-                  }}
                 />
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="mobileCmToMsFactor" className="block mb-1">MS per CM Factor</Label>
+              <div className="form-group">
+                <label className="form-label" htmlFor="mobileCmToMsFactor">
+                  MS per CM Factor
+                </label>
                 <input
+                  className="form-input"
                   id="mobileCmToMsFactor"
-                  className="w-full p-2 border rounded-md bg-background"
                   type="tel"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   defaultValue={cmToMsFactor}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    localCmToMsFactorRef.current = e.target.value;
-                  }}
                 />
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="mobileTurnDuration" className="block mb-1">Turn Duration (ms)</Label>
+              <div className="form-group">
+                <label className="form-label" htmlFor="mobileTurnDuration">
+                  Turn Duration (ms)
+                </label>
                 <input
+                  className="form-input"
                   id="mobileTurnDuration"
-                  className="w-full p-2 border rounded-md bg-background"
                   type="tel"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   defaultValue={turnDurationMs}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    localTurnDurationRef.current = e.target.value;
-                  }}
                 />
               </div>
-              
-              <div className="flex justify-end gap-2 mt-4">
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleResetToDefaults();
-                  }}
-                >
-                  Reset
-                </button>
-                <button
-                  type="submit"
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2"
-                >
-                  Save Changes
-                </button>
-              </div>
-            </form>
+            </div>
+            <div className="dialog-footer">
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={resetValues}
+              >
+                Reset
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={formSubmit}
+              >
+                Save Changes
+              </button>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       );
     }
 
