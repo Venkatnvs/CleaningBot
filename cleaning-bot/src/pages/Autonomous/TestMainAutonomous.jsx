@@ -648,6 +648,11 @@ const MainAutonomous = () => {
     const localCmToMsFactorRef = useRef(cmToMsFactor);
     const localTurnDurationRef = useRef(turnDurationMs);
     
+    // Add refs for input fields to explicitly focus them
+    const commandDelayInputRef = useRef(null);
+    const cmToMsFactorInputRef = useRef(null);
+    const turnDurationInputRef = useRef(null);
+    
     // Update refs when dialog opens
     useEffect(() => {
       if (settingsOpen) {
@@ -657,9 +662,11 @@ const MainAutonomous = () => {
       }
     }, [settingsOpen, commandDelayMs, cmToMsFactor, turnDurationMs]);
     
+    // We don't need this for mobile - it could be interfering with keyboard
     // Temporarily disable resize listeners when dialog is open
     useEffect(() => {
-      if (settingsOpen) {
+      // Only apply on desktop
+      if (!isMobile && settingsOpen) {
         // Prevent any resize handling by setting a flag
         const handleResize = () => {
           // Do nothing while settings are open
@@ -672,7 +679,7 @@ const MainAutonomous = () => {
           window.removeEventListener('resize', handleResize);
         };
       }
-    }, [settingsOpen]);
+    }, [settingsOpen, isMobile]);
 
     const handleSaveSettings = () => {
       // Get current values from refs
@@ -694,9 +701,15 @@ const MainAutonomous = () => {
       localTurnDurationRef.current = DEFAULT_TURN_DURATION_MS;
       
       // Force update the input values
-      document.getElementById('commandDelay').value = DEFAULT_COMMAND_DELAY_MS;
-      document.getElementById('cmToMsFactor').value = DEFAULT_CM_TO_MS_FACTOR;
-      document.getElementById('turnDuration').value = DEFAULT_TURN_DURATION_MS;
+      if (isMobile) {
+        document.getElementById('mobileCommandDelay').value = DEFAULT_COMMAND_DELAY_MS;
+        document.getElementById('mobileCmToMsFactor').value = DEFAULT_CM_TO_MS_FACTOR;
+        document.getElementById('mobileTurnDuration').value = DEFAULT_TURN_DURATION_MS;
+      } else {
+        document.getElementById('commandDelay').value = DEFAULT_COMMAND_DELAY_MS;
+        document.getElementById('cmToMsFactor').value = DEFAULT_CM_TO_MS_FACTOR;
+        document.getElementById('turnDuration').value = DEFAULT_TURN_DURATION_MS;
+      }
     };
 
     // For mobile devices, use a completely different approach with fixed position
@@ -720,32 +733,59 @@ const MainAutonomous = () => {
             
             <div className="grid gap-4 py-2">
               <div className="space-y-2">
-                <Label htmlFor="commandDelay">Command Delay (ms)</Label>
+                <Label htmlFor="mobileCommandDelay">Command Delay (ms)</Label>
                 <Input
-                  id="commandDelay"
-                  type="number"
+                  id="mobileCommandDelay"
+                  ref={commandDelayInputRef}
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   defaultValue={commandDelayMs}
                   onChange={(e) => localCommandDelayRef.current = e.target.value}
+                  onClick={() => {
+                    // Small delay to ensure the modal is fully rendered
+                    setTimeout(() => {
+                      commandDelayInputRef.current?.focus();
+                    }, 100);
+                  }}
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="cmToMsFactor">MS per CM Factor</Label>
+                <Label htmlFor="mobileCmToMsFactor">MS per CM Factor</Label>
                 <Input
-                  id="cmToMsFactor"
-                  type="number"
+                  id="mobileCmToMsFactor"
+                  ref={cmToMsFactorInputRef}
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   defaultValue={cmToMsFactor}
                   onChange={(e) => localCmToMsFactorRef.current = e.target.value}
+                  onClick={() => {
+                    // Small delay to ensure the modal is fully rendered
+                    setTimeout(() => {
+                      cmToMsFactorInputRef.current?.focus();
+                    }, 100);
+                  }}
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="turnDuration">Turn Duration (ms)</Label>
+                <Label htmlFor="mobileTurnDuration">Turn Duration (ms)</Label>
                 <Input
-                  id="turnDuration"
-                  type="number"
+                  id="mobileTurnDuration"
+                  ref={turnDurationInputRef}
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   defaultValue={turnDurationMs}
                   onChange={(e) => localTurnDurationRef.current = e.target.value}
+                  onClick={() => {
+                    // Small delay to ensure the modal is fully rendered
+                    setTimeout(() => {
+                      turnDurationInputRef.current?.focus();
+                    }, 100);
+                  }}
                 />
               </div>
             </div>
