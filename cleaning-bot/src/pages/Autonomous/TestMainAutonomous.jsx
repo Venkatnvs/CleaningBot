@@ -643,58 +643,137 @@ const MainAutonomous = () => {
 
   // Settings dialog for command execution constants
   const SettingsDialog = () => {
-    const [localCommandDelay, setLocalCommandDelay] = useState(commandDelayMs);
-    const [localCmToMsFactor, setLocalCmToMsFactor] = useState(cmToMsFactor);
-    const [localTurnDuration, setLocalTurnDuration] = useState(turnDurationMs);
-
-    // Reset local state when dialog opens
+    // Use refs instead of state to prevent re-renders during input
+    const localCommandDelayRef = useRef(commandDelayMs);
+    const localCmToMsFactorRef = useRef(cmToMsFactor);
+    const localTurnDurationRef = useRef(turnDurationMs);
+    
+    // Update refs when dialog opens
     useEffect(() => {
       if (settingsOpen) {
-        setLocalCommandDelay(commandDelayMs);
-        setLocalCmToMsFactor(cmToMsFactor);
-        setLocalTurnDuration(turnDurationMs);
+        localCommandDelayRef.current = commandDelayMs;
+        localCmToMsFactorRef.current = cmToMsFactor;
+        localTurnDurationRef.current = turnDurationMs;
       }
     }, [settingsOpen, commandDelayMs, cmToMsFactor, turnDurationMs]);
+    
+    // Temporarily disable resize listeners when dialog is open
+    useEffect(() => {
+      if (settingsOpen) {
+        // Prevent any resize handling by setting a flag
+        const handleResize = () => {
+          // Do nothing while settings are open
+        };
+        
+        // Replace resize handler temporarily
+        window.addEventListener('resize', handleResize);
+        
+        return () => {
+          window.removeEventListener('resize', handleResize);
+        };
+      }
+    }, [settingsOpen]);
 
     const handleSaveSettings = () => {
-      setCommandDelayMs(parseInt(localCommandDelay));
-      setCmToMsFactor(parseInt(localCmToMsFactor));
-      setTurnDurationMs(parseInt(localTurnDuration));
-      setSettingsOpen(false);
+      // Get current values from refs
+      setCommandDelayMs(parseInt(localCommandDelayRef.current));
+      setCmToMsFactor(parseInt(localCmToMsFactorRef.current));
+      setTurnDurationMs(parseInt(localTurnDurationRef.current));
+      
+      // Close dialog after a short delay
+      setTimeout(() => {
+        setSettingsOpen(false);
+      }, 100);
+      
       toast.success("Settings saved successfully");
     };
 
     const handleResetToDefaults = () => {
-      setLocalCommandDelay(DEFAULT_COMMAND_DELAY_MS);
-      setLocalCmToMsFactor(DEFAULT_CM_TO_MS_FACTOR);
-      setLocalTurnDuration(DEFAULT_TURN_DURATION_MS);
+      localCommandDelayRef.current = DEFAULT_COMMAND_DELAY_MS;
+      localCmToMsFactorRef.current = DEFAULT_CM_TO_MS_FACTOR;
+      localTurnDurationRef.current = DEFAULT_TURN_DURATION_MS;
+      
+      // Force update the input values
+      document.getElementById('commandDelay').value = DEFAULT_COMMAND_DELAY_MS;
+      document.getElementById('cmToMsFactor').value = DEFAULT_CM_TO_MS_FACTOR;
+      document.getElementById('turnDuration').value = DEFAULT_TURN_DURATION_MS;
     };
 
-    const handleOpenChange = (open) => {
-      // Prevent closing if tapping inside the dialog
-      if (!open) {
-        // Add a small delay to prevent instant reopening
-        setTimeout(() => setSettingsOpen(false), 50);
-      } else {
-        setSettingsOpen(true);
-      }
-    };
+    // For mobile devices, use a completely different approach with fixed position
+    if (isMobile) {
+      if (!settingsOpen) return null;
+      
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background rounded-lg w-full max-w-sm p-4 shadow-lg">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-lg">Bot Movement Settings</h3>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setSettingsOpen(false)}
+                className="h-8 w-8 p-0"
+              >
+                ✕
+              </Button>
+            </div>
+            
+            <div className="grid gap-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="commandDelay">Command Delay (ms)</Label>
+                <Input
+                  id="commandDelay"
+                  type="number"
+                  defaultValue={commandDelayMs}
+                  onChange={(e) => localCommandDelayRef.current = e.target.value}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="cmToMsFactor">MS per CM Factor</Label>
+                <Input
+                  id="cmToMsFactor"
+                  type="number"
+                  defaultValue={cmToMsFactor}
+                  onChange={(e) => localCmToMsFactorRef.current = e.target.value}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="turnDuration">Turn Duration (ms)</Label>
+                <Input
+                  id="turnDuration"
+                  type="number"
+                  defaultValue={turnDurationMs}
+                  onChange={(e) => localTurnDurationRef.current = e.target.value}
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={handleResetToDefaults}>
+                Reset
+              </Button>
+              <Button onClick={handleSaveSettings}>
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
+    // Use Dialog component for desktop
     return (
-      <Dialog open={settingsOpen} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-[425px]" onPointerDownOutside={(e) => {
-          // Prevent closing on touch inside the dialog content
-          if (e.target && e.target.closest('.dialog-content')) {
-            e.preventDefault();
-          }
-        }}>
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Bot Movement Settings</DialogTitle>
             <DialogDescription>
               Adjust timing parameters for robot movement execution
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4 dialog-content">
+          <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="commandDelay" className="text-right">
                 Command Delay (ms)
@@ -702,8 +781,8 @@ const MainAutonomous = () => {
               <Input
                 id="commandDelay"
                 type="number"
-                value={localCommandDelay}
-                onChange={(e) => setLocalCommandDelay(e.target.value)}
+                defaultValue={commandDelayMs}
+                onChange={(e) => localCommandDelayRef.current = e.target.value}
                 className="col-span-3"
               />
             </div>
@@ -714,8 +793,8 @@ const MainAutonomous = () => {
               <Input
                 id="cmToMsFactor"
                 type="number"
-                value={localCmToMsFactor}
-                onChange={(e) => setLocalCmToMsFactor(e.target.value)}
+                defaultValue={cmToMsFactor}
+                onChange={(e) => localCmToMsFactorRef.current = e.target.value}
                 className="col-span-3"
               />
             </div>
@@ -726,8 +805,8 @@ const MainAutonomous = () => {
               <Input
                 id="turnDuration"
                 type="number"
-                value={localTurnDuration}
-                onChange={(e) => setLocalTurnDuration(e.target.value)}
+                defaultValue={turnDurationMs}
+                onChange={(e) => localTurnDurationRef.current = e.target.value}
                 className="col-span-3"
               />
             </div>
