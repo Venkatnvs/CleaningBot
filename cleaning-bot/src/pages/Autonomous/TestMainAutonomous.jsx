@@ -713,13 +713,16 @@ const MainAutonomous = () => {
 
         return (
           <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-            <div className="bg-background rounded-lg w-full max-w-sm p-4 shadow-lg">
+            <div className="bg-background rounded-lg w-full max-w-sm p-4 shadow-lg" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-semibold text-lg">Bot Movement Settings</h3>
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  onClick={() => setSettingsOpen(false)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSettingsOpen(false);
+                  }}
                   className="h-8 w-8 p-0"
                 >
                   ✕
@@ -729,20 +732,24 @@ const MainAutonomous = () => {
               <form 
                 onSubmit={(e) => {
                   e.preventDefault();
+                  e.stopPropagation();
                   handleSaveSettings();
                 }}
                 className="grid gap-4 py-2"
+                onClick={e => e.stopPropagation()}
               >
                 <div className="space-y-2">
                   <Label htmlFor="mobileCommandDelay" className="block mb-1">
                     Command Delay (ms)
                   </Label>
-                  <input
+                  <Input
                     id="mobileCommandDelay"
-                    className="w-full p-2 border rounded-md bg-background"
                     type="number"
                     defaultValue={commandDelayMs}
+                    onClick={e => e.stopPropagation()}
+                    onFocus={e => e.stopPropagation()}
                     onChange={(e) => {
+                      e.stopPropagation();
                       localCommandDelayRef.current = e.target.value;
                     }}
                   />
@@ -752,12 +759,14 @@ const MainAutonomous = () => {
                   <Label htmlFor="mobileCmToMsFactor" className="block mb-1">
                     MS per CM Factor
                   </Label>
-                  <input
+                  <Input
                     id="mobileCmToMsFactor"
-                    className="w-full p-2 border rounded-md bg-background"
                     type="number"
                     defaultValue={cmToMsFactor}
+                    onClick={e => e.stopPropagation()}
+                    onFocus={e => e.stopPropagation()}
                     onChange={(e) => {
+                      e.stopPropagation();
                       localCmToMsFactorRef.current = e.target.value;
                     }}
                   />
@@ -767,12 +776,14 @@ const MainAutonomous = () => {
                   <Label htmlFor="mobileTurnDuration" className="block mb-1">
                     Turn Duration (ms)
                   </Label>
-                  <input
+                  <Input
                     id="mobileTurnDuration"
-                    className="w-full p-2 border rounded-md bg-background"
                     type="number"
                     defaultValue={turnDurationMs}
+                    onClick={e => e.stopPropagation()}
+                    onFocus={e => e.stopPropagation()}
                     onChange={(e) => {
+                      e.stopPropagation();
                       localTurnDurationRef.current = e.target.value;
                     }}
                   />
@@ -782,7 +793,11 @@ const MainAutonomous = () => {
                   <button
                     type="button"
                     className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
-                    onClick={handleResetToDefaults}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleResetToDefaults();
+                    }}
                   >
                     Reset
                   </button>
