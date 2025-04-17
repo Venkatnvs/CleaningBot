@@ -657,225 +657,6 @@ const MainAutonomous = () => {
       }
     }, [settingsOpen, commandDelayMs, cmToMsFactor, turnDurationMs]);
     
-    // Create a completely separate dialog for mobile using vanilla JS
-    useEffect(() => {
-      if (isMobile && settingsOpen) {
-        // Remove any existing dialog
-        const existingDialog = document.getElementById('mobile-settings-dialog');
-        if (existingDialog) {
-          document.body.removeChild(existingDialog);
-        }
-        
-        // Create overlay and dialog
-        const overlay = document.createElement('div');
-        overlay.id = 'mobile-settings-dialog';
-        overlay.style.position = 'fixed';
-        overlay.style.top = '0';
-        overlay.style.left = '0';
-        overlay.style.right = '0';
-        overlay.style.bottom = '0';
-        overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        overlay.style.zIndex = '9999';
-        overlay.style.display = 'flex';
-        overlay.style.alignItems = 'center';
-        overlay.style.justifyContent = 'center';
-        
-        // Create dialog content
-        const dialogContent = document.createElement('div');
-        dialogContent.style.backgroundColor = 'white';
-        dialogContent.style.borderRadius = '8px';
-        dialogContent.style.width = '90%';
-        dialogContent.style.maxWidth = '320px';
-        dialogContent.style.maxHeight = '90vh';
-        dialogContent.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
-        dialogContent.style.overflow = 'auto';
-        
-        // Create dialog header
-        const header = document.createElement('div');
-        header.style.display = 'flex';
-        header.style.justifyContent = 'space-between';
-        header.style.alignItems = 'center';
-        header.style.padding = '16px';
-        header.style.borderBottom = '1px solid #eee';
-        
-        const title = document.createElement('h3');
-        title.textContent = 'Bot Movement Settings';
-        title.style.margin = '0';
-        title.style.fontSize = '18px';
-        title.style.fontWeight = '600';
-        
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = '×';
-        closeBtn.style.backgroundColor = 'transparent';
-        closeBtn.style.border = 'none';
-        closeBtn.style.fontSize = '24px';
-        closeBtn.style.cursor = 'pointer';
-        closeBtn.style.padding = '0';
-        closeBtn.style.width = '24px';
-        closeBtn.style.height = '24px';
-        closeBtn.style.display = 'flex';
-        closeBtn.style.alignItems = 'center';
-        closeBtn.style.justifyContent = 'center';
-        
-        closeBtn.addEventListener('click', () => {
-          document.body.removeChild(overlay);
-          setSettingsOpen(false);
-        });
-        
-        header.appendChild(title);
-        header.appendChild(closeBtn);
-        
-        // Create form
-        const form = document.createElement('div');
-        form.style.padding = '16px';
-        
-        // Command delay input
-        const cmdDelayGroup = document.createElement('div');
-        cmdDelayGroup.style.marginBottom = '16px';
-        
-        const cmdDelayLabel = document.createElement('label');
-        cmdDelayLabel.textContent = 'Command Delay (ms)';
-        cmdDelayLabel.style.display = 'block';
-        cmdDelayLabel.style.marginBottom = '8px';
-        cmdDelayLabel.style.fontWeight = '500';
-        
-        const cmdDelayInput = document.createElement('input');
-        cmdDelayInput.type = 'tel';
-        cmdDelayInput.inputMode = 'numeric';
-        cmdDelayInput.pattern = '[0-9]*';
-        cmdDelayInput.value = commandDelayMs;
-        cmdDelayInput.style.width = '100%';
-        cmdDelayInput.style.padding = '8px 12px';
-        cmdDelayInput.style.border = '1px solid #ddd';
-        cmdDelayInput.style.borderRadius = '4px';
-        cmdDelayInput.style.fontSize = '16px';
-        
-        cmdDelayGroup.appendChild(cmdDelayLabel);
-        cmdDelayGroup.appendChild(cmdDelayInput);
-        
-        // CM to MS Factor input
-        const cmToMsGroup = document.createElement('div');
-        cmToMsGroup.style.marginBottom = '16px';
-        
-        const cmToMsLabel = document.createElement('label');
-        cmToMsLabel.textContent = 'MS per CM Factor';
-        cmToMsLabel.style.display = 'block';
-        cmToMsLabel.style.marginBottom = '8px';
-        cmToMsLabel.style.fontWeight = '500';
-        
-        const cmToMsInput = document.createElement('input');
-        cmToMsInput.type = 'tel';
-        cmToMsInput.inputMode = 'numeric';
-        cmToMsInput.pattern = '[0-9]*';
-        cmToMsInput.value = cmToMsFactor;
-        cmToMsInput.style.width = '100%';
-        cmToMsInput.style.padding = '8px 12px';
-        cmToMsInput.style.border = '1px solid #ddd';
-        cmToMsInput.style.borderRadius = '4px';
-        cmToMsInput.style.fontSize = '16px';
-        
-        cmToMsGroup.appendChild(cmToMsLabel);
-        cmToMsGroup.appendChild(cmToMsInput);
-        
-        // Turn Duration input
-        const turnDurGroup = document.createElement('div');
-        turnDurGroup.style.marginBottom = '16px';
-        
-        const turnDurLabel = document.createElement('label');
-        turnDurLabel.textContent = 'Turn Duration (ms)';
-        turnDurLabel.style.display = 'block';
-        turnDurLabel.style.marginBottom = '8px';
-        turnDurLabel.style.fontWeight = '500';
-        
-        const turnDurInput = document.createElement('input');
-        turnDurInput.type = 'tel';
-        turnDurInput.inputMode = 'numeric';
-        turnDurInput.pattern = '[0-9]*';
-        turnDurInput.value = turnDurationMs;
-        turnDurInput.style.width = '100%';
-        turnDurInput.style.padding = '8px 12px';
-        turnDurInput.style.border = '1px solid #ddd';
-        turnDurInput.style.borderRadius = '4px';
-        turnDurInput.style.fontSize = '16px';
-        
-        turnDurGroup.appendChild(turnDurLabel);
-        turnDurGroup.appendChild(turnDurInput);
-        
-        // Add all form groups
-        form.appendChild(cmdDelayGroup);
-        form.appendChild(cmToMsGroup);
-        form.appendChild(turnDurGroup);
-        
-        // Create footer
-        const footer = document.createElement('div');
-        footer.style.padding = '16px';
-        footer.style.display = 'flex';
-        footer.style.justifyContent = 'flex-end';
-        footer.style.gap = '8px';
-        footer.style.borderTop = '1px solid #eee';
-        
-        // Reset button
-        const resetBtn = document.createElement('button');
-        resetBtn.textContent = 'Reset';
-        resetBtn.style.padding = '8px 12px';
-        resetBtn.style.backgroundColor = 'white';
-        resetBtn.style.border = '1px solid #ddd';
-        resetBtn.style.borderRadius = '4px';
-        resetBtn.style.fontWeight = '500';
-        resetBtn.style.cursor = 'pointer';
-        
-        resetBtn.addEventListener('click', () => {
-          cmdDelayInput.value = DEFAULT_COMMAND_DELAY_MS;
-          cmToMsInput.value = DEFAULT_CM_TO_MS_FACTOR;
-          turnDurInput.value = DEFAULT_TURN_DURATION_MS;
-        });
-        
-        // Save button
-        const saveBtn = document.createElement('button');
-        saveBtn.textContent = 'Save Changes';
-        saveBtn.style.padding = '8px 12px';
-        saveBtn.style.backgroundColor = '#2563eb';
-        saveBtn.style.color = 'white';
-        saveBtn.style.border = 'none';
-        saveBtn.style.borderRadius = '4px';
-        saveBtn.style.fontWeight = '500';
-        saveBtn.style.cursor = 'pointer';
-        
-        saveBtn.addEventListener('click', () => {
-          // Save the values
-          setCommandDelayMs(parseInt(cmdDelayInput.value));
-          setCmToMsFactor(parseInt(cmToMsInput.value));
-          setTurnDurationMs(parseInt(turnDurInput.value));
-          
-          // Close the dialog
-          document.body.removeChild(overlay);
-          setSettingsOpen(false);
-          
-          toast.success("Settings saved successfully");
-        });
-        
-        footer.appendChild(resetBtn);
-        footer.appendChild(saveBtn);
-        
-        // Assemble the dialog
-        dialogContent.appendChild(header);
-        dialogContent.appendChild(form);
-        dialogContent.appendChild(footer);
-        overlay.appendChild(dialogContent);
-        
-        // Add to document
-        document.body.appendChild(overlay);
-        
-        // Clean up when component unmounts or dialog closes
-        return () => {
-          const dialog = document.getElementById('mobile-settings-dialog');
-          if (dialog) {
-            document.body.removeChild(dialog);
-          }
-        };
-      }
-    }, [isMobile, settingsOpen, commandDelayMs, cmToMsFactor, turnDurationMs]);
-
     // We don't need this for mobile - it could be interfering with keyboard
     // Temporarily disable resize listeners when dialog is open
     useEffect(() => {
@@ -926,9 +707,108 @@ const MainAutonomous = () => {
       }
     };
 
-    // For mobile devices, now handled by the useEffect above
+    // For mobile devices, use a completely different approach with fixed position
     if (isMobile) {
-      return null; // The dialog is created with vanilla JS
+      if (!settingsOpen) return null;
+      
+      // Use a simple form that's optimized for mobile
+      return (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex flex-col justify-center p-4" 
+          style={{touchAction: "none"}}
+          onTouchMove={(e) => e.preventDefault()}
+        >
+          <div className="bg-background rounded-lg w-full max-w-sm mx-auto p-4 shadow-lg">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-lg">Bot Movement Settings</h3>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setSettingsOpen(false)}
+                className="h-8 w-8 p-0"
+              >
+                ✕
+              </Button>
+            </div>
+            
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveSettings();
+              }}
+              className="grid gap-4 py-2"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="mobileCommandDelay" className="block mb-1">Command Delay (ms)</Label>
+                <input
+                  id="mobileCommandDelay"
+                  className="w-full p-2 border rounded-md bg-background"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  defaultValue={commandDelayMs}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    localCommandDelayRef.current = e.target.value;
+                  }}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="mobileCmToMsFactor" className="block mb-1">MS per CM Factor</Label>
+                <input
+                  id="mobileCmToMsFactor"
+                  className="w-full p-2 border rounded-md bg-background"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  defaultValue={cmToMsFactor}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    localCmToMsFactorRef.current = e.target.value;
+                  }}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="mobileTurnDuration" className="block mb-1">Turn Duration (ms)</Label>
+                <input
+                  id="mobileTurnDuration"
+                  className="w-full p-2 border rounded-md bg-background"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  defaultValue={turnDurationMs}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    localTurnDurationRef.current = e.target.value;
+                  }}
+                />
+              </div>
+              
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleResetToDefaults();
+                  }}
+                >
+                  Reset
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
     }
 
     // Use Dialog component for desktop
@@ -992,15 +872,15 @@ const MainAutonomous = () => {
 
   return (
     <PageContainer scrollable>
+      <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>
+                  <Settings className="h-4 w-4" />
+                </Button>
       <div className="space-y-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between text-base sm:text-lg">
               <span>Autonomous Route Planning</span>
               <div className="flex items-center space-x-2">
-                <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>
-                  <Settings className="h-4 w-4" />
-                </Button>
                 <Button variant="ghost" size="sm" onClick={() => setShowScaleInfo(!showScaleInfo)}>
                   <Info className="h-4 w-4" />
                 </Button>
