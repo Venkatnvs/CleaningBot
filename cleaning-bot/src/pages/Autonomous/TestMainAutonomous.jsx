@@ -68,6 +68,7 @@ const MainAutonomous = () => {
   const [cmToMsFactor, setCmToMsFactor] = useState(DEFAULT_CM_TO_MS_FACTOR);
   const [turnDurationMs, setTurnDurationMs] = useState(DEFAULT_TURN_DURATION_MS);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showMobileSettings, setShowMobileSettings] = useState(false);
 
   // Firebase and stage/container refs
   const stageRef = useRef(null);
@@ -696,123 +697,17 @@ const MainAutonomous = () => {
       localTurnDurationRef.current = DEFAULT_TURN_DURATION_MS;
       
       // Force update the input values
-      if (isMobile) {
-        document.getElementById('mobileCommandDelay').value = DEFAULT_COMMAND_DELAY_MS;
-        document.getElementById('mobileCmToMsFactor').value = DEFAULT_CM_TO_MS_FACTOR;
-        document.getElementById('mobileTurnDuration').value = DEFAULT_TURN_DURATION_MS;
-      } else {
+      if (document.getElementById('commandDelay')) {
         document.getElementById('commandDelay').value = DEFAULT_COMMAND_DELAY_MS;
         document.getElementById('cmToMsFactor').value = DEFAULT_CM_TO_MS_FACTOR;
         document.getElementById('turnDuration').value = DEFAULT_TURN_DURATION_MS;
       }
     };
 
-      // For mobile devices, use a simple approach with minimal event blocking
-      if (isMobile) {
-        if (!settingsOpen) return null;
-
-        return (
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-            <div className="bg-background rounded-lg w-full max-w-sm p-4 shadow-lg" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-semibold text-lg">Bot Movement Settings</h3>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSettingsOpen(false);
-                  }}
-                  className="h-8 w-8 p-0"
-                >
-                  ✕
-                </Button>
-              </div>
-
-              <form 
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleSaveSettings();
-                }}
-                className="grid gap-4 py-2"
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="space-y-2">
-                  <Label htmlFor="mobileCommandDelay" className="block mb-1">
-                    Command Delay (ms)
-                  </Label>
-                  <Input
-                    id="mobileCommandDelay"
-                    type="number"
-                    defaultValue={commandDelayMs}
-                    onClick={e => e.stopPropagation()}
-                    onFocus={e => e.stopPropagation()}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      localCommandDelayRef.current = e.target.value;
-                    }}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="mobileCmToMsFactor" className="block mb-1">
-                    MS per CM Factor
-                  </Label>
-                  <Input
-                    id="mobileCmToMsFactor"
-                    type="number"
-                    defaultValue={cmToMsFactor}
-                    onClick={e => e.stopPropagation()}
-                    onFocus={e => e.stopPropagation()}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      localCmToMsFactorRef.current = e.target.value;
-                    }}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="mobileTurnDuration" className="block mb-1">
-                    Turn Duration (ms)
-                  </Label>
-                  <Input
-                    id="mobileTurnDuration"
-                    type="number"
-                    defaultValue={turnDurationMs}
-                    onClick={e => e.stopPropagation()}
-                    onFocus={e => e.stopPropagation()}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      localTurnDurationRef.current = e.target.value;
-                    }}
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 mt-4">
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleResetToDefaults();
-                    }}
-                  >
-                    Reset
-                  </button>
-                  <button
-                    type="submit"
-                    className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90"
-                  >
-                    Save Changes
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        );
-      }
+    // For mobile devices, we're now using the bottom card instead
+    if (isMobile) {
+      return null;
+    }
 
     // Use Dialog component for desktop
     return (
@@ -881,9 +776,17 @@ const MainAutonomous = () => {
             <CardTitle className="flex items-center justify-between text-base sm:text-lg">
               <span>Autonomous Route Planning</span>
               <div className="flex items-center space-x-2">
-                <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>
-                  <Settings className="h-4 w-4" />
-                </Button>
+                {(!isMobile || (isMobile && !showMobileSettings)) && (
+                  <Button variant="ghost" size="sm" onClick={() => {
+                    if (isMobile) {
+                      setShowMobileSettings(true);
+                    } else {
+                      setSettingsOpen(true);
+                    }
+                  }}>
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                )}
                 <Button variant="ghost" size="sm" onClick={() => setShowScaleInfo(!showScaleInfo)}>
                   <Info className="h-4 w-4" />
                 </Button>
@@ -1145,6 +1048,85 @@ const MainAutonomous = () => {
           </CardContent>
         </Card>
       </div>
+      {/* Mobile Settings Bottom Card */}
+      {isMobile && showMobileSettings && (
+        <div className="fixed bottom-0 left-0 right-0 bg-background rounded-t-lg shadow-lg z-50 p-4 border-t border-border transition-transform duration-300" style={{ transform: 'translateY(0)' }}>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-semibold text-base">Bot Movement Settings</h3>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setShowMobileSettings(false)}
+              className="h-8 w-8 p-0"
+            >
+              ✕
+            </Button>
+          </div>
+          
+          <form className="grid gap-3 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="mobileBottomCommandDelay" className="text-sm">
+                Command Delay (ms)
+              </Label>
+              <Input
+                id="mobileBottomCommandDelay"
+                type="number"
+                value={commandDelayMs}
+                onChange={(e) => setCommandDelayMs(parseInt(e.target.value))}
+              />
+            </div>
+            
+            <div className="space-y-1">
+              <Label htmlFor="mobileBottomCmToMsFactor" className="text-sm">
+                MS per CM Factor
+              </Label>
+              <Input
+                id="mobileBottomCmToMsFactor"
+                type="number"
+                value={cmToMsFactor}
+                onChange={(e) => setCmToMsFactor(parseInt(e.target.value))}
+              />
+            </div>
+            
+            <div className="space-y-1">
+              <Label htmlFor="mobileBottomTurnDuration" className="text-sm">
+                Turn Duration (ms)
+              </Label>
+              <Input
+                id="mobileBottomTurnDuration"
+                type="number"
+                value={turnDurationMs}
+                onChange={(e) => setTurnDurationMs(parseInt(e.target.value))}
+              />
+            </div>
+
+            <div className="flex justify-between gap-2 mt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setCommandDelayMs(DEFAULT_COMMAND_DELAY_MS);
+                  setCmToMsFactor(DEFAULT_CM_TO_MS_FACTOR);
+                  setTurnDurationMs(DEFAULT_TURN_DURATION_MS);
+                }}
+              >
+                Reset to Defaults
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  toast.success("Settings saved successfully");
+                  setShowMobileSettings(false);
+                }}
+              >
+                Apply & Close
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
       <SettingsDialog />
     </PageContainer>
   );
