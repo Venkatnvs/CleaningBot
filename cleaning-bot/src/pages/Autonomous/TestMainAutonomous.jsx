@@ -18,7 +18,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { createPortal } from 'react-dom';
 
 // Constants for ESP32 mapping and UI scale
 const BOX_SIZE_CM = 10; // Each grid square is 10cm x 10cm
@@ -658,6 +657,225 @@ const MainAutonomous = () => {
       }
     }, [settingsOpen, commandDelayMs, cmToMsFactor, turnDurationMs]);
     
+    // Create a completely separate dialog for mobile using vanilla JS
+    useEffect(() => {
+      if (isMobile && settingsOpen) {
+        // Remove any existing dialog
+        const existingDialog = document.getElementById('mobile-settings-dialog');
+        if (existingDialog) {
+          document.body.removeChild(existingDialog);
+        }
+        
+        // Create overlay and dialog
+        const overlay = document.createElement('div');
+        overlay.id = 'mobile-settings-dialog';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.right = '0';
+        overlay.style.bottom = '0';
+        overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        overlay.style.zIndex = '9999';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        
+        // Create dialog content
+        const dialogContent = document.createElement('div');
+        dialogContent.style.backgroundColor = 'white';
+        dialogContent.style.borderRadius = '8px';
+        dialogContent.style.width = '90%';
+        dialogContent.style.maxWidth = '320px';
+        dialogContent.style.maxHeight = '90vh';
+        dialogContent.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+        dialogContent.style.overflow = 'auto';
+        
+        // Create dialog header
+        const header = document.createElement('div');
+        header.style.display = 'flex';
+        header.style.justifyContent = 'space-between';
+        header.style.alignItems = 'center';
+        header.style.padding = '16px';
+        header.style.borderBottom = '1px solid #eee';
+        
+        const title = document.createElement('h3');
+        title.textContent = 'Bot Movement Settings';
+        title.style.margin = '0';
+        title.style.fontSize = '18px';
+        title.style.fontWeight = '600';
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '×';
+        closeBtn.style.backgroundColor = 'transparent';
+        closeBtn.style.border = 'none';
+        closeBtn.style.fontSize = '24px';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.style.padding = '0';
+        closeBtn.style.width = '24px';
+        closeBtn.style.height = '24px';
+        closeBtn.style.display = 'flex';
+        closeBtn.style.alignItems = 'center';
+        closeBtn.style.justifyContent = 'center';
+        
+        closeBtn.addEventListener('click', () => {
+          document.body.removeChild(overlay);
+          setSettingsOpen(false);
+        });
+        
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+        
+        // Create form
+        const form = document.createElement('div');
+        form.style.padding = '16px';
+        
+        // Command delay input
+        const cmdDelayGroup = document.createElement('div');
+        cmdDelayGroup.style.marginBottom = '16px';
+        
+        const cmdDelayLabel = document.createElement('label');
+        cmdDelayLabel.textContent = 'Command Delay (ms)';
+        cmdDelayLabel.style.display = 'block';
+        cmdDelayLabel.style.marginBottom = '8px';
+        cmdDelayLabel.style.fontWeight = '500';
+        
+        const cmdDelayInput = document.createElement('input');
+        cmdDelayInput.type = 'tel';
+        cmdDelayInput.inputMode = 'numeric';
+        cmdDelayInput.pattern = '[0-9]*';
+        cmdDelayInput.value = commandDelayMs;
+        cmdDelayInput.style.width = '100%';
+        cmdDelayInput.style.padding = '8px 12px';
+        cmdDelayInput.style.border = '1px solid #ddd';
+        cmdDelayInput.style.borderRadius = '4px';
+        cmdDelayInput.style.fontSize = '16px';
+        
+        cmdDelayGroup.appendChild(cmdDelayLabel);
+        cmdDelayGroup.appendChild(cmdDelayInput);
+        
+        // CM to MS Factor input
+        const cmToMsGroup = document.createElement('div');
+        cmToMsGroup.style.marginBottom = '16px';
+        
+        const cmToMsLabel = document.createElement('label');
+        cmToMsLabel.textContent = 'MS per CM Factor';
+        cmToMsLabel.style.display = 'block';
+        cmToMsLabel.style.marginBottom = '8px';
+        cmToMsLabel.style.fontWeight = '500';
+        
+        const cmToMsInput = document.createElement('input');
+        cmToMsInput.type = 'tel';
+        cmToMsInput.inputMode = 'numeric';
+        cmToMsInput.pattern = '[0-9]*';
+        cmToMsInput.value = cmToMsFactor;
+        cmToMsInput.style.width = '100%';
+        cmToMsInput.style.padding = '8px 12px';
+        cmToMsInput.style.border = '1px solid #ddd';
+        cmToMsInput.style.borderRadius = '4px';
+        cmToMsInput.style.fontSize = '16px';
+        
+        cmToMsGroup.appendChild(cmToMsLabel);
+        cmToMsGroup.appendChild(cmToMsInput);
+        
+        // Turn Duration input
+        const turnDurGroup = document.createElement('div');
+        turnDurGroup.style.marginBottom = '16px';
+        
+        const turnDurLabel = document.createElement('label');
+        turnDurLabel.textContent = 'Turn Duration (ms)';
+        turnDurLabel.style.display = 'block';
+        turnDurLabel.style.marginBottom = '8px';
+        turnDurLabel.style.fontWeight = '500';
+        
+        const turnDurInput = document.createElement('input');
+        turnDurInput.type = 'tel';
+        turnDurInput.inputMode = 'numeric';
+        turnDurInput.pattern = '[0-9]*';
+        turnDurInput.value = turnDurationMs;
+        turnDurInput.style.width = '100%';
+        turnDurInput.style.padding = '8px 12px';
+        turnDurInput.style.border = '1px solid #ddd';
+        turnDurInput.style.borderRadius = '4px';
+        turnDurInput.style.fontSize = '16px';
+        
+        turnDurGroup.appendChild(turnDurLabel);
+        turnDurGroup.appendChild(turnDurInput);
+        
+        // Add all form groups
+        form.appendChild(cmdDelayGroup);
+        form.appendChild(cmToMsGroup);
+        form.appendChild(turnDurGroup);
+        
+        // Create footer
+        const footer = document.createElement('div');
+        footer.style.padding = '16px';
+        footer.style.display = 'flex';
+        footer.style.justifyContent = 'flex-end';
+        footer.style.gap = '8px';
+        footer.style.borderTop = '1px solid #eee';
+        
+        // Reset button
+        const resetBtn = document.createElement('button');
+        resetBtn.textContent = 'Reset';
+        resetBtn.style.padding = '8px 12px';
+        resetBtn.style.backgroundColor = 'white';
+        resetBtn.style.border = '1px solid #ddd';
+        resetBtn.style.borderRadius = '4px';
+        resetBtn.style.fontWeight = '500';
+        resetBtn.style.cursor = 'pointer';
+        
+        resetBtn.addEventListener('click', () => {
+          cmdDelayInput.value = DEFAULT_COMMAND_DELAY_MS;
+          cmToMsInput.value = DEFAULT_CM_TO_MS_FACTOR;
+          turnDurInput.value = DEFAULT_TURN_DURATION_MS;
+        });
+        
+        // Save button
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = 'Save Changes';
+        saveBtn.style.padding = '8px 12px';
+        saveBtn.style.backgroundColor = '#2563eb';
+        saveBtn.style.color = 'white';
+        saveBtn.style.border = 'none';
+        saveBtn.style.borderRadius = '4px';
+        saveBtn.style.fontWeight = '500';
+        saveBtn.style.cursor = 'pointer';
+        
+        saveBtn.addEventListener('click', () => {
+          // Save the values
+          setCommandDelayMs(parseInt(cmdDelayInput.value));
+          setCmToMsFactor(parseInt(cmToMsInput.value));
+          setTurnDurationMs(parseInt(turnDurInput.value));
+          
+          // Close the dialog
+          document.body.removeChild(overlay);
+          setSettingsOpen(false);
+          
+          toast.success("Settings saved successfully");
+        });
+        
+        footer.appendChild(resetBtn);
+        footer.appendChild(saveBtn);
+        
+        // Assemble the dialog
+        dialogContent.appendChild(header);
+        dialogContent.appendChild(form);
+        dialogContent.appendChild(footer);
+        overlay.appendChild(dialogContent);
+        
+        // Add to document
+        document.body.appendChild(overlay);
+        
+        // Clean up when component unmounts or dialog closes
+        return () => {
+          const dialog = document.getElementById('mobile-settings-dialog');
+          if (dialog) {
+            document.body.removeChild(dialog);
+          }
+        };
+      }
+    }, [isMobile, settingsOpen, commandDelayMs, cmToMsFactor, turnDurationMs]);
+
     // We don't need this for mobile - it could be interfering with keyboard
     // Temporarily disable resize listeners when dialog is open
     useEffect(() => {
@@ -708,202 +926,9 @@ const MainAutonomous = () => {
       }
     };
 
-    // For mobile devices, use a completely different approach with fixed position
+    // For mobile devices, now handled by the useEffect above
     if (isMobile) {
-      // Don't render anything when closed
-      if (!settingsOpen) return null;
-      
-      // Use refs to update the main component state only when form is submitted
-      const formSubmit = () => {
-        try {
-          const cmdDelay = document.getElementById('mobileCommandDelay')?.value;
-          const cmToMs = document.getElementById('mobileCmToMsFactor')?.value;
-          const turnDur = document.getElementById('mobileTurnDuration')?.value;
-          
-          if (cmdDelay) setCommandDelayMs(parseInt(cmdDelay));
-          if (cmToMs) setCmToMsFactor(parseInt(cmToMs));
-          if (turnDur) setTurnDurationMs(parseInt(turnDur));
-          
-          setSettingsOpen(false);
-          toast.success("Settings saved successfully");
-        } catch (e) {
-          console.error(e);
-          toast.error("Failed to save settings");
-        }
-      };
-      
-      const resetValues = () => {
-        try {
-          document.getElementById('mobileCommandDelay').value = DEFAULT_COMMAND_DELAY_MS;
-          document.getElementById('mobileCmToMsFactor').value = DEFAULT_CM_TO_MS_FACTOR;
-          document.getElementById('mobileTurnDuration').value = DEFAULT_TURN_DURATION_MS;
-        } catch (e) {
-          console.error(e);
-        }
-      };
-      
-      // Render a simple HTML dialog that won't be affected by React's event system
-      return createPortal(
-        <div className="dialog-container">
-          <style jsx global>{`
-            .dialog-container {
-              position: fixed;
-              top: 0;
-              left: 0;
-              right: 0;
-              bottom: 0;
-              background: rgba(0, 0, 0, 0.5);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              z-index: 9999;
-              padding: 16px;
-            }
-            .dialog-content {
-              background: white;
-              border-radius: 8px;
-              width: 100%;
-              max-width: 320px;
-              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-              overflow: hidden;
-            }
-            .dialog-header {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              padding: 16px;
-              border-bottom: 1px solid #eee;
-            }
-            .dialog-title {
-              font-weight: 600;
-              font-size: 18px;
-              margin: 0;
-            }
-            .dialog-close {
-              background: transparent;
-              border: none;
-              font-size: 24px;
-              cursor: pointer;
-              padding: 0;
-              margin: 0;
-              height: 24px;
-              width: 24px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            }
-            .dialog-body {
-              padding: 16px;
-            }
-            .form-group {
-              margin-bottom: 16px;
-            }
-            .form-label {
-              display: block;
-              margin-bottom: 8px;
-              font-weight: 500;
-            }
-            .form-input {
-              width: 100%;
-              padding: 8px 12px;
-              border: 1px solid #ddd;
-              border-radius: 4px;
-              font-size: 16px;
-            }
-            .dialog-footer {
-              padding: 16px;
-              display: flex;
-              justify-content: flex-end;
-              gap: 8px;
-              border-top: 1px solid #eee;
-            }
-            .btn {
-              padding: 8px 12px;
-              border-radius: 4px;
-              font-weight: 500;
-              cursor: pointer;
-            }
-            .btn-outline {
-              background: white;
-              border: 1px solid #ddd;
-            }
-            .btn-primary {
-              background: #2563eb;
-              color: white;
-              border: none;
-            }
-          `}</style>
-          <div className="dialog-content">
-            <div className="dialog-header">
-              <h3 className="dialog-title">Bot Movement Settings</h3>
-              <button 
-                className="dialog-close" 
-                onClick={() => setSettingsOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="dialog-body">
-              <div className="form-group">
-                <label className="form-label" htmlFor="mobileCommandDelay">
-                  Command Delay (ms)
-                </label>
-                <input
-                  className="form-input"
-                  id="mobileCommandDelay"
-                  type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  defaultValue={commandDelayMs}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="mobileCmToMsFactor">
-                  MS per CM Factor
-                </label>
-                <input
-                  className="form-input"
-                  id="mobileCmToMsFactor"
-                  type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  defaultValue={cmToMsFactor}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="mobileTurnDuration">
-                  Turn Duration (ms)
-                </label>
-                <input
-                  className="form-input"
-                  id="mobileTurnDuration"
-                  type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  defaultValue={turnDurationMs}
-                />
-              </div>
-            </div>
-            <div className="dialog-footer">
-              <button
-                className="btn btn-outline"
-                type="button"
-                onClick={resetValues}
-              >
-                Reset
-              </button>
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={formSubmit}
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      );
+      return null; // The dialog is created with vanilla JS
     }
 
     // Use Dialog component for desktop
